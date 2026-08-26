@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Murder Mystery Escape</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔪</text></svg>">
+<script type="importmap">
+{ "imports": { "three": "/vendor/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="ui">
+
+  <!-- ============ MAIN MENU ============ -->
+  <div class="screen active" id="screen-menu">
+    <div class="menu-card">
+      <h1 class="title">🔪 Murder Mystery <span>Escape</span></h1>
+      <p class="tagline">Solve the puzzles. Escape the facility. Trust no one.</p>
+      <input id="name-input" maxlength="14" placeholder="Your name" autocomplete="off">
+      <div class="menu-buttons">
+        <button class="btn big primary" id="btn-quickplay">▶ Quick Play</button>
+        <button class="btn big" id="btn-create">Create Room</button>
+        <div class="join-row">
+          <input id="join-code" maxlength="4" placeholder="CODE" autocomplete="off">
+          <button class="btn" id="btn-join">Join</button>
+        </div>
+        <button class="btn big shop" id="btn-shop">🛒 Shop <span id="menu-points" class="points-chip">0 ⭐</span></button>
+      </div>
+      <p class="hint">⌨️ WASD + mouse &nbsp;•&nbsp; 📱 touch joystick &nbsp;•&nbsp; 🎮 gamepad</p>
+      <p class="hint" id="conn-status"></p>
+    </div>
+  </div>
+
+  <!-- ============ SHOP ============ -->
+  <div class="screen" id="screen-shop">
+    <div class="shop-card">
+      <div class="shop-header">
+        <button class="btn" id="btn-shop-back">← Back</button>
+        <h2>Shop</h2>
+        <span class="points-chip big" id="shop-points">0 ⭐</span>
+      </div>
+      <div class="shop-tabs">
+        <button class="tab active" data-tab="characters">Characters</button>
+        <button class="tab" data-tab="abilities">Imposter Abilities</button>
+      </div>
+      <p class="shop-note" id="shop-note">Pick your look — everyone sees it in the lobby.</p>
+      <div class="shop-grid" id="shop-grid"></div>
+    </div>
+  </div>
+
+  <!-- ============ LOBBY ============ -->
+  <div class="screen" id="screen-lobby">
+    <div class="lobby-card">
+      <div class="lobby-header">
+        <button class="btn" id="btn-leave">← Leave</button>
+        <div class="room-code">Room <b id="lobby-code">----</b></div>
+      </div>
+      <div class="lobby-players" id="lobby-players"></div>
+      <div class="lobby-section">
+        <h3>Character</h3>
+        <div class="char-strip" id="lobby-chars"></div>
+      </div>
+      <div class="lobby-section">
+        <h3>Imposter abilities <span class="sub">(used only when you're the imposter)</span></h3>
+        <div class="char-strip" id="lobby-abilities"></div>
+      </div>
+      <div class="lobby-footer">
+        <button class="btn" id="btn-addbot">+ Add Bot</button>
+        <button class="btn big primary" id="btn-start">Start Game</button>
+      </div>
+      <p class="hint" id="lobby-hint">Share the room code with friends — or add bots and go!</p>
+    </div>
+  </div>
+
+  <!-- ============ HUD ============ -->
+  <div id="hud" class="hidden">
+    <div id="role-banner" class="hidden"></div>
+    <div class="hud-top">
+      <div id="task-panel">
+        <div class="progress-outer"><div class="progress-inner" id="task-progress"></div></div>
+        <ul id="task-list"></ul>
+      </div>
+      <div id="hud-timer">10:00</div>
+    </div>
+    <div id="toast-area"></div>
+
+    <!-- touch controls -->
+    <div id="joystick-zone"><div id="joystick-base"><div id="joystick-knob"></div></div></div>
+    <div id="look-zone"></div>
+
+    <div id="action-buttons">
+      <button class="action-btn hidden" id="btn-use">USE</button>
+      <button class="action-btn danger hidden" id="btn-kill">KILL</button>
+      <button class="action-btn warn hidden" id="btn-report">REPORT</button>
+      <button class="action-btn hidden" id="btn-meeting">📢</button>
+      <button class="action-btn ability hidden" id="btn-ability-0"></button>
+      <button class="action-btn ability hidden" id="btn-ability-1"></button>
+      <button class="action-btn hidden" id="btn-escape-hint">🚪</button>
+    </div>
+    <div id="blackout-overlay" class="hidden"></div>
+    <div id="dead-banner" class="hidden">💀 You were murdered — you're a ghost now. Watch the mystery unfold…</div>
+  </div>
+
+  <!-- ============ COUNTDOWN ============ -->
+  <div id="countdown-overlay" class="hidden"><span id="countdown-num">5</span></div>
+
+  <!-- ============ ROLE REVEAL ============ -->
+  <div id="role-reveal" class="hidden">
+    <div class="reveal-inner">
+      <h2 id="reveal-title"></h2>
+      <p id="reveal-sub"></p>
+    </div>
+  </div>
+
+  <!-- ============ PUZZLE MODAL ============ -->
+  <div class="modal hidden" id="puzzle-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="puzzle-title">Puzzle</h3>
+        <button class="btn small" id="puzzle-close">✕</button>
+      </div>
+      <div id="puzzle-body"></div>
+    </div>
+  </div>
+
+  <!-- ============ MEETING ============ -->
+  <div class="modal hidden" id="meeting-modal">
+    <div class="modal-card wide">
+      <div class="modal-header">
+        <h3 id="meeting-title">🚨 Emergency Meeting</h3>
+        <span id="meeting-timer" class="points-chip">35</span>
+      </div>
+      <p id="meeting-sub"></p>
+      <div id="meeting-players"></div>
+      <div id="meeting-chat">
+        <div id="chat-log"></div>
+        <div class="chat-row">
+          <input id="chat-input" maxlength="120" placeholder="Say something…">
+          <button class="btn small" id="chat-send">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ GAME OVER ============ -->
+  <div class="modal hidden" id="gameover-modal">
+    <div class="modal-card">
+      <h2 id="gameover-title">Crew Wins!</h2>
+      <p id="gameover-reason"></p>
+      <div id="gameover-points"></div>
+      <button class="btn big primary" id="btn-back-lobby">Back to Lobby</button>
+    </div>
+  </div>
+
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "murder-mystery-escape",
+  "version": "1.0.0",
+  "description": "3D multiplayer murder mystery escape game — crew solves puzzles to escape while imposters hunt them.",
+  "type": "module",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "three": "^0.180.0",
+    "ws": "^8.18.0"
+  }
+}
