@@ -69,6 +69,10 @@
         <h3>Imposter abilities <span class="sub">(used only when you're the imposter)</span></h3>
         <div class="char-strip" id="lobby-abilities"></div>
       </div>
+      <div class="lobby-section">
+        <h3>Map theme <span class="sub" id="theme-host-note">(host picks — maps are generated fresh each match)</span></h3>
+        <div class="char-strip" id="lobby-themes"></div>
+      </div>
       <div class="lobby-footer">
         <button class="btn" id="btn-addbot">+ Add Bot</button>
         <button class="btn big primary" id="btn-start">Start Game</button>
@@ -82,11 +86,16 @@
     <div id="role-banner" class="hidden"></div>
     <div class="hud-top">
       <div id="task-panel">
-        <div class="progress-outer"><div class="progress-inner" id="task-progress"></div></div>
+        <div id="objective-title">Objectives</div>
+        <ul id="door-list"></ul>
         <ul id="task-list"></ul>
       </div>
-      <div id="hud-timer">10:00</div>
+      <div class="hud-top-right">
+        <div id="hud-timer">12:00</div>
+        <button id="btn-music" class="mini-btn" title="Toggle music">🎵</button>
+      </div>
     </div>
+    <div id="carry-banner" class="hidden"></div>
     <div id="toast-area"></div>
 
     <!-- touch controls -->
@@ -95,12 +104,14 @@
 
     <div id="action-buttons">
       <button class="action-btn hidden" id="btn-use">USE</button>
+      <button class="action-btn grab hidden" id="btn-grab">GRAB</button>
+      <button class="action-btn grab hidden" id="btn-deliver">INSERT</button>
+      <button class="action-btn heal hidden" id="btn-revive">REVIVE</button>
       <button class="action-btn danger hidden" id="btn-kill">KILL</button>
       <button class="action-btn warn hidden" id="btn-report">REPORT</button>
       <button class="action-btn hidden" id="btn-meeting">📢</button>
       <button class="action-btn ability hidden" id="btn-ability-0"></button>
       <button class="action-btn ability hidden" id="btn-ability-1"></button>
-      <button class="action-btn hidden" id="btn-escape-hint">🚪</button>
     </div>
     <div id="blackout-overlay" class="hidden"></div>
     <div id="dead-banner" class="hidden">💀 You were murdered — you're a ghost now. Watch the mystery unfold…</div>

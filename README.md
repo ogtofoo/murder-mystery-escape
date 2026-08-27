@@ -1,8 +1,9 @@
 # 🔪 Murder Mystery Escape
 
 A 3D multiplayer murder-mystery escape game with wobbly, colorful characters.
-The crew solves puzzles to open the Escape Airlock and get out alive — but one
-(or sometimes two!) of the players is an **imposter** hunting them down.
+A team is locked in a facility and must **work together, room by room**, to
+reach the exit — while hidden imposters pick them off and a Trickster tries to
+get themselves lynched.
 
 Playable on **desktop (keyboard + mouse)**, **mobile (touch)**, and **gamepad**.
 
@@ -17,60 +18,111 @@ Then open <http://localhost:3000>. Friends on the same network can join with
 your machine's IP (e.g. `http://192.168.1.20:3000`) — or deploy the server
 anywhere Node.js runs and share the URL.
 
-## How to play
+## The escape route
 
-- **Quick Play** joins any open lobby; **Create Room** gives you a 4-letter
-  code to share. Lobbies auto-fill with AI bots up to 4 players, and the host
-  can add more (max 10).
-- At match start, roles are secret: with 7+ players there's a chance of
-  **two imposters**.
-- **Crew** 🛠 — complete your puzzle stations (wires, keypads, memory
-  sequences, fuses, levers). When *all* crew tasks hit 100%, the Escape
-  Airlock opens: stand on the green pad to escape. Escape with the crew, or
-  eject every imposter, to win.
-- **Imposter** 🔪 — kill the crew before they escape. Fake puzzles to blend
-  in. Kills have a cooldown; bodies can be reported.
-- Anyone can **report a body** or press the hub's **emergency button** to
-  call a meeting: chat, then vote to eject a suspect (majority; ties/skips
-  eject no one).
-- Ghosts can still finish their own puzzles, so a murder never makes the
-  door unopenable.
-- Time limit 10 minutes — if nobody escapes, the imposters win the lockdown.
+Every match is a **cooperative chain of locked rooms**. The imposters start
+trapped with everyone else, so at first they *have to help*:
+
+```
+[ START ROOM ]   Everyone spawns locked in together.
+      │          Repair its stations → opens the only exit.
+      ▼  door A
+[    HUB    ]    Big central area. Three locked doors lead off it.
+      ├─▶ door B → [ KEY ROOM  ]   holds the Exit Key   🔑
+      ├─▶ door C → [ CODE ROOM ]   holds the Exit Code  🔢
+      └─▶ door X → [   EXIT    ]   final door — needs BOTH delivered
+```
+
+- The hub's stations are split in two halves: one half unlocks door B, the
+  other unlocks door C.
+- Someone must **carry** the key and the code (one item at a time!) back to
+  the **exit terminal** and insert them. Drop them — or get murdered holding
+  one — and it falls on the floor for anyone to grab.
+- As more rooms open, the group spreads out — and the imposters finally get
+  the isolation they need.
+
+## Roles
+
+| Role | | What they do |
+| --- | --- | --- |
+| **Crew** | 🛠 | Repair stations, fetch the key/code, escape. |
+| **Imposter** | 🔪 | Kill the crew before they escape. Must help in the start room. Only role that can use shop abilities. |
+| **Medic** | 💉 | Can **revive dead bodies** (2 charges, cooldown). Wins with the crew. |
+| **Engineer** | 🔧 | Every repair **counts double** — auto-completes a second station. Wins with the crew. |
+| **Trickster** | 🎭 | **Wins alone if the crew votes them out** — and then *everyone else loses*. Act suspicious. |
+
+With 7+ players there's a chance of **two imposters**; 9+ always has two.
+Medic/Engineer appear from 5 players, Trickster from 6.
+
+Ghosts aren't useless: a murdered crewmate can still finish their stations to
+help the team open doors.
+
+## Map themes 🗺
+
+Maps are **procedurally generated fresh every match** — room sizes, door
+positions, station layout, crate cover, the key/code hiding spots and the
+exit code all change. The host picks the theme in the lobby (or Random):
+
+| | Theme | |
+| --- | --- | --- |
+| 🛰 | **Space Station** | Cryo Bay → Command Deck → Armory / Data Core → Escape Airlock |
+| 🏚 | **Haunted Manor** | Cellar → Grand Hall → Study / Library → Front Gate |
+| 🌿 | **Jungle Temple** | Antechamber → Great Court → Idol Room / Glyph Hall → Temple Gate |
+| ❄️ | **Arctic Lab** | Airlock Bay → Main Lab → Cold Store / Server Room → Ice Tunnel |
+
+## Dynamic music 🎵
+
+The soundtrack is **generated live in the browser** (WebAudio — no audio
+files) and reacts to the game:
+
+- Layers fade in as tension rises: bass pulse → arpeggio → percussion →
+  heartbeat.
+- Intensity is driven by real events: how many doors are open, a recent
+  murder, an imposter closing in on you, a blackout, carrying the key, and
+  the final door opening (full chase mode).
+- Each theme has its own scale, tempo and voice, so the Manor sounds nothing
+  like the Arctic Lab.
+- Stings for kills, unlocks, pickups, revives, meetings, and win/lose.
+- Toggle with the 🎵 button in the HUD.
 
 ## Points & Shop ⭐
 
-Every match earns points (puzzles, kills, escaping, winning, voting an
-imposter out). Spend them in the **Shop** on:
+Every match earns points (repairs, kills, revives, escaping, winning, voting
+an imposter out). Spend them in the **Shop** on:
 
 - **Characters** — 10 colorful wobbly skins.
 - **Imposter abilities** (usable *only* when you roll imposter, equip up to 2):
-  - ⚡ **Adrenaline** — speed burst
-  - 👻 **Vanish** — short invisibility
-  - 🌑 **Blackout** — shrink the crew's vision
-  - 🎭 **Shapeshift** — copy a random crewmate's look
+  ⚡ **Adrenaline** (speed burst) · 👻 **Vanish** (invisibility) ·
+  🌑 **Blackout** (shrink crew vision) · 🎭 **Shapeshift** (copy a crewmate).
 
 Points and unlocks persist in your browser.
 
 ## Controls
 
-| Action  | Keyboard/Mouse | Touch | Gamepad |
-| ------- | -------------- | ----- | ------- |
-| Move    | WASD / arrows  | left joystick | left stick |
-| Camera  | mouse (click to lock) | drag right side | right stick |
-| Use / puzzle | E | USE button | A |
-| Kill    | Q | KILL button | X |
-| Report  | R | REPORT button | Y |
+| Action | Keyboard/Mouse | Touch | Gamepad |
+| --- | --- | --- | --- |
+| Move | WASD / arrows | left joystick | left stick |
+| Camera | mouse (click to lock) | drag right side | right stick |
+| Use / grab / insert | E | on-screen buttons | A |
+| Kill | Q | KILL button | X |
+| Report / revive | R | REPORT / REVIVE | Y |
 | Meeting | T | 📢 button | Start |
 | Ability 1 / 2 | 1 / 2 | ability buttons | B / LB |
 
+`E` is contextual: it inserts a carried item at the terminal, grabs a nearby
+key/code, or opens the station puzzle.
+
 ## Architecture
 
-- `server/server.js` — Node.js + WebSocket authoritative server: rooms,
-  roles, kills, meetings/votes, task progress, escape logic, win conditions,
-  points, and AI bots (waypoint pathfinding; imposter bots hunt
-  opportunistically, crew bots do tasks and flee to the airlock).
-- `shared/` — map layout & game constants shared by server and client.
-- `public/` — Three.js client: wobbly toon characters, the facility map,
-  puzzle minigames (DOM), HUD, shop, and unified keyboard/touch/gamepad input.
+- `server/server.js` — Node.js + WebSocket authoritative server: rooms, roles,
+  door/station progression, collectables, kills & revives, meetings/votes, win
+  conditions, points, and AI bots that pursue the current objective.
+- `shared/mapgen.js` — seeded procedural map generator (server and clients
+  build identical worlds from `{seed, themeId}`) plus collision helpers.
+- `shared/constants.js` — roles, themes, abilities, characters, tuning.
+- `public/js/` — Three.js client: `world.js` (themed level meshes),
+  `character.js` (wobbly toon characters), `puzzles.js` (station minigames),
+  `music.js` (procedural dynamic score), `controls.js` (keyboard/touch/gamepad),
+  `main.js` (glue, HUD, netcode).
 
 No build step — the client uses native ES modules with a vendored Three.js.

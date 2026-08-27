@@ -31,10 +31,69 @@ export const POINTS = {
   TASK: 6,
   KILL: 12,
   ESCAPE: 25,
+  REVIVE: 15,
   WIN_CREW: 40,
   WIN_IMPOSTER: 55,
+  WIN_TRICKSTER: 70,
   EJECT_IMPOSTER_VOTE: 10, // voted correctly for an ejected imposter
 };
+
+// ---------------------------------------------------------------------------
+// Roles. Crew-aligned roles win with the crew; the trickster is a lone wolf
+// who wins ONLY by getting voted out — then everyone else loses.
+export const ROLES = {
+  crew:     { name: 'Crew',     icon: '🛠', color: '#5fd98a' },
+  imposter: { name: 'Imposter', icon: '🔪', color: '#ff5f7a' },
+  medic:    { name: 'Medic',    icon: '💉', color: '#66d9e8' },
+  engineer: { name: 'Engineer', icon: '🔧', color: '#ffd166' },
+  trickster:{ name: 'Trickster',icon: '🎭', color: '#c792ea' },
+};
+export const CREW_ALIGNED = ['crew', 'medic', 'engineer'];
+export const MEDIC_REVIVES = 2;
+export const MEDIC_REVIVE_COOLDOWN = 25; // seconds
+
+// Special-role odds (rolled at match start; requires enough players).
+export function rollSpecialRoles(playerCount, rng = Math.random) {
+  return {
+    medic: playerCount >= 5 && rng() < 0.7,
+    engineer: playerCount >= 5 && rng() < 0.7,
+    trickster: playerCount >= 6 && rng() < 0.6,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Map themes (host picks in the lobby). Colors feed the renderer; `music`
+// feeds the procedural soundtrack (scale intervals, root freq, tempo, voice).
+export const THEMES = [
+  {
+    id: 'station', name: 'Space Station', icon: '🛰',
+    floor: '#8a9bb0', wall: '#5c6b85', wallTop: '#48546b', crate: '#b08850',
+    bg: '#2a3852', ground: '#5a6a52', accent: '#39d2c0', door: '#c23a3a', stripe: '#ffd166',
+    tints: ['#b8c4d4', '#a8d8c8', '#e8c9a0', '#d4a8a8', '#c8b8e0', '#9adba8'],
+    music: { root: 220, scale: [0, 2, 3, 5, 7, 8, 10], tempo: 96, wave: 'sawtooth' },
+  },
+  {
+    id: 'manor', name: 'Haunted Manor', icon: '🏚',
+    floor: '#6b5a4a', wall: '#4a3a42', wallTop: '#382a32', crate: '#7a5230',
+    bg: '#241a2e', ground: '#2e2230', accent: '#c9a227', door: '#7a2a4a', stripe: '#c9a227',
+    tints: ['#7a6a5a', '#6a5a6e', '#7e6650', '#5e5a72', '#755a5a', '#8a7a52'],
+    music: { root: 196, scale: [0, 2, 3, 5, 7, 8, 11], tempo: 78, wave: 'triangle' },
+  },
+  {
+    id: 'temple', name: 'Jungle Temple', icon: '🌿',
+    floor: '#8a9464', wall: '#6e6e56', wallTop: '#585844', crate: '#8a6a3a',
+    bg: '#1e3226', ground: '#2a4030', accent: '#e0b040', door: '#4a7a3a', stripe: '#e0b040',
+    tints: ['#9aa470', '#84a478', '#a49a64', '#8aa48a', '#a4a478', '#7aa46a'],
+    music: { root: 233, scale: [0, 2, 3, 5, 7, 9, 10], tempo: 106, wave: 'square' },
+  },
+  {
+    id: 'arctic', name: 'Arctic Lab', icon: '❄️',
+    floor: '#b8c8d8', wall: '#8aa2b8', wallTop: '#7590a8', crate: '#5a7a9a',
+    bg: '#26364a', ground: '#4a5a6e', accent: '#66e0ff', door: '#3a5a9a', stripe: '#66e0ff',
+    tints: ['#c4d2e0', '#b0cad8', '#c8c2d8', '#accade', '#bcd4cc', '#a8c2e0'],
+    music: { root: 262, scale: [0, 2, 4, 6, 7, 9, 11], tempo: 88, wave: 'sine' },
+  },
+];
 
 // ---------------------------------------------------------------------------
 // Playable characters (Wobbly-Life-style colorful blobs). Cost in points.

@@ -20,6 +20,7 @@ const defaults = () => ({
   ownedAbilities: [],
   selectedChar: 'sunny',
   equippedAbilities: [],
+  musicOn: true,
 });
 
 let profile = { ...defaults(), ...(load() || {}) };
@@ -33,6 +34,8 @@ export const store = {
   get points() { return profile.points; },
 
   setName(name) { profile.name = name; save(); },
+
+  setMusic(on) { profile.musicOn = !!on; save(); },
 
   addPoints(n) { profile.points += n; save(); },
 
