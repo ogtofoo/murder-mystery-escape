@@ -181,6 +181,8 @@ body.touch #joystick-zone, body.touch #look-zone { display: block; }
 .wires-col { display: flex; flex-direction: column; gap: 16px; z-index: 2; }
 .wire-node { width: 46px; height: 46px; border-radius: 12px; border: 3px solid rgba(255,255,255,.25); cursor: pointer; }
 .wire-node.active { outline: 3px solid #fff; }
+.wire-node.hinted { outline: 3px dashed #ffd166; animation: hint-pulse .8s ease-in-out infinite; }
+@keyframes hint-pulse { 50% { transform: scale(1.12); } }
 .wire-node.done { opacity: .45; cursor: default; }
 .wires-svg { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 .keypad-display { font-size: 30px; letter-spacing: 10px; background: #0d1220; border-radius: 12px; padding: 10px 18px; min-width: 200px; text-align: center; font-variant-numeric: tabular-nums; }

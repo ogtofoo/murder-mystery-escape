@@ -32,6 +32,8 @@ export const POINTS = {
   KILL: 12,
   ESCAPE: 25,
   REVIVE: 15,
+  HOTWIRE: 5,
+  BYPASS: 20,
   WIN_CREW: 40,
   WIN_IMPOSTER: 55,
   WIN_TRICKSTER: 70,
@@ -51,6 +53,26 @@ export const ROLES = {
 export const CREW_ALIGNED = ['crew', 'medic', 'engineer'];
 export const MEDIC_REVIVES = 2;
 export const MEDIC_REVIVE_COOLDOWN = 25; // seconds
+
+// ---------------------------------------------------------------------------
+// Engineer kit — a crewmate who cracks locks and reads hints.
+//
+//  • passive  : minigames give them extra information (shorter sequences,
+//               longer code display, highlighted targets…)
+//  • hotwire  : force a station open with no minigame at all
+//  • scan     : reveal where the key and code are, and read the exit code
+//  • bypass   : brute-force a MISSING key/code straight into the exit terminal
+//               — slow, must stand still, and it screams your position to
+//               everyone on the map.
+export const ENGINEER = {
+  HOTWIRE_CHARGES: 3,
+  HOTWIRE_COOLDOWN: 18,
+  SCAN_CHARGES: 2,
+  SCAN_COOLDOWN: 30,
+  SCAN_REVEAL_TIME: 20,   // seconds the key/code stay marked through walls
+  BYPASS_CHANNEL: 10,     // seconds of standing at the terminal
+  BYPASS_COST: 2,         // hotwire charges spent per brute-forced item
+};
 
 // Special-role odds (rolled at match start; requires enough players).
 export function rollSpecialRoles(playerCount, rng = Math.random) {

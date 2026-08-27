@@ -269,6 +269,23 @@ export function setCollectableVisible(world, id, visible, pos) {
   }
 }
 
+// Engineer SCAN: make an item's beacon tall, bright and visible through walls.
+export function setScanMark(world, id, on, pos) {
+  const c = world.collectMeshes.get(id);
+  if (!c) return;
+  c.scanned = on;
+  c.beacon.material.depthTest = !on;
+  c.beacon.material.opacity = on ? 0.4 : 0.14;
+  c.beacon.scale.y = on ? 4 : 1;
+  c.beacon.renderOrder = on ? 999 : 0;
+  c.beacon.visible = true;
+  if (pos) {
+    c.beacon.position.x = pos.x;
+    c.beacon.position.z = pos.z;
+  }
+  c.beacon.position.y = on ? 11 : 3;
+}
+
 export function animateWorld(world, time, finalOpen) {
   const blink = (Math.sin(time * 4) + 1) / 2;
   for (const s of world.stationMeshes.values()) {
@@ -276,10 +293,11 @@ export function animateWorld(world, time, finalOpen) {
     s.lamp.material.color.setHSL(0.12, 0.9, 0.3 + blink * 0.4);
   }
   for (const c of world.collectMeshes.values()) {
+    if (c.scanned) c.beacon.material.opacity = 0.25 + blink * 0.35;
     if (!c.group.visible) continue;
     c.group.rotation.y = time * 1.4;
     c.group.position.y = 1.1 + Math.sin(time * 2) * 0.18;
-    c.beacon.material.opacity = 0.08 + blink * 0.12;
+    if (!c.scanned) c.beacon.material.opacity = 0.08 + blink * 0.12;
   }
   world.escapePad.material.opacity = finalOpen ? 0.35 + blink * 0.4 : 0.12;
   // Locked doors pulse their stripe

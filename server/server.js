@@ -15,6 +15,7 @@ import {
   MEETING_COOLDOWN, COUNTDOWN_TIME, MIN_PLAYERS, MAX_PLAYERS, ESCAPE_HOLD,
   imposterCount, POINTS, CHARACTERS, ABILITIES, MAX_EQUIPPED_ABILITIES, BOT_NAMES,
   CREW_ALIGNED, MEDIC_REVIVES, MEDIC_REVIVE_COOLDOWN, rollSpecialRoles, THEMES,
+  ENGINEER,
 } from '../shared/constants.js';
 import { generateMap, nearestWaypoint, collideWithWalls } from '../shared/mapgen.js';
 
@@ -255,9 +256,14 @@ class Room {
         killReadyAt: now() + KILL_COOLDOWN / 2,
         reviveReadyAt: 0,
         revivesLeft: p.role === 'medic' ? MEDIC_REVIVES : 0,
+        hotwire: p.role === 'engineer' ? ENGINEER.HOTWIRE_CHARGES : 0,
+        hotwireReadyAt: 0,
+        scans: p.role === 'engineer' ? ENGINEER.SCAN_CHARGES : 0,
+        scanReadyAt: 0,
+        bypass: null,
         invisibleUntil: 0, speedUntil: 0, disguiseCharId: null, disguiseUntil: 0,
         escapeEnteredAt: 0,
-        stats: { tasks: 0, kills: 0, revives: 0, escaped: false, correctVote: false },
+        stats: { tasks: 0, kills: 0, revives: 0, hotwired: 0, bypassed: 0, escaped: false, correctVote: false },
         abilityState: {},
       });
       for (const ab of p.equippedAbilities) {
@@ -274,6 +280,8 @@ class Room {
         seed, themeId,
         imposterIds: p.role === 'imposter' ? imposterIds : [],
         revives: p.revivesLeft,
+        hotwire: p.hotwire,
+        scans: p.scans,
         timeLimit: this.timeLimit,
         players: all.map(q => ({ id: q.id, name: q.name, charId: q.charId })),
       });
@@ -314,20 +322,99 @@ class Room {
     this.stationDone.add(stationId);
     this.stationBy[stationId] = p.id;
     p.stats.tasks++;
-    // Engineers are twice as effective: their completion also credits a
-    // random unfinished station in the same group.
-    if (p.role === 'engineer') {
-      const sameGroup = this.map.stations.filter(s =>
-        s.group === st.group && s.part === st.part && !this.stationDone.has(s.id));
-      if (sameGroup.length) {
-        const bonus = sameGroup[Math.floor(Math.random() * sameGroup.length)];
-        this.stationDone.add(bonus.id);
-        this.stationBy[bonus.id] = p.id;
-        this.broadcast({ t: 'engineerBonus', playerId: p.id, stationId: bonus.id });
-      }
-    }
     this.checkDoors();
     this.broadcastObjectives();
+  }
+
+  // ---- engineer abilities ----
+
+  // Force a station open with no minigame.
+  engHotwire(p) {
+    if (this.state !== 'playing' || p.role !== 'engineer' || p.escaped) return;
+    if (p.hotwire <= 0 || now() < p.hotwireReadyAt) return;
+    const st = this.map.stations.find(s =>
+      !this.stationDone.has(s.id) && distP(s, p.pos) <= INTERACT_RANGE * 2.5);
+    if (!st) return;
+    p.hotwire--;
+    p.hotwireReadyAt = now() + ENGINEER.HOTWIRE_COOLDOWN;
+    p.stats.hotwired++;
+    this.completeStation(p, st.id);
+    this.broadcast({ t: 'hotwired', playerId: p.id, stationId: st.id });
+    this.send(p, { t: 'engCharges', hotwire: p.hotwire, scans: p.scans });
+  }
+
+  // Reveal the key/code positions to the crew and read out the exit code.
+  engScan(p) {
+    if (this.state !== 'playing' || p.role !== 'engineer' || !p.alive || p.escaped) return;
+    if (p.scans <= 0 || now() < p.scanReadyAt) return;
+    p.scans--;
+    p.scanReadyAt = now() + ENGINEER.SCAN_COOLDOWN;
+    const marks = this.map.collectables
+      .filter(c => !this.delivered.has(c.id))
+      .map(c => ({ id: c.id, ...this.collectPos[c.id] }));
+    // Intel goes to the crew only — imposters and the trickster stay blind.
+    this.broadcast({
+      t: 'scanReveal', byId: p.id, marks,
+      duration: ENGINEER.SCAN_REVEAL_TIME,
+      exitCode: this.map.exitCode,
+    }, (q) => CREW_ALIGNED.includes(q.role));
+    this.send(p, { t: 'engCharges', hotwire: p.hotwire, scans: p.scans });
+  }
+
+  // Begin brute-forcing a missing key/code at the exit terminal. Loud, slow,
+  // and cancelled if the engineer moves — see tickEngineer().
+  engBypassStart(p) {
+    if (this.state !== 'playing' || p.role !== 'engineer' || !p.alive || p.escaped) return;
+    if (p.bypass) return;
+    if (p.hotwire < ENGINEER.BYPASS_COST) return;
+    if (distP(this.map.exitTerminal, p.pos) > INTERACT_RANGE * 2) return;
+    const missing = this.map.collectables.map(c => c.id).filter(id => !this.delivered.has(id));
+    if (!missing.length) return;
+    p.bypass = {
+      target: missing[0],
+      endsAt: now() + ENGINEER.BYPASS_CHANNEL,
+      from: { x: p.pos.x, z: p.pos.z },
+    };
+    // Everyone hears it — this is the imposter's cue to come hunting.
+    this.broadcast({
+      t: 'bypassStart', playerId: p.id, collectableId: p.bypass.target,
+      duration: ENGINEER.BYPASS_CHANNEL,
+      x: this.map.exitTerminal.x, z: this.map.exitTerminal.z,
+    });
+  }
+
+  cancelBypass(p, reason) {
+    if (!p.bypass) return;
+    p.bypass = null;
+    this.broadcast({ t: 'bypassEnd', playerId: p.id, ok: false, reason });
+  }
+
+  tickEngineer(t) {
+    for (const p of this.players.values()) {
+      if (!p.bypass) continue;
+      if (!p.alive || p.escaped || this.state !== 'playing') { this.cancelBypass(p, 'interrupted'); continue; }
+      // Must hold position at the terminal for the whole channel.
+      if (distP(p.bypass.from, p.pos) > 2.2 || distP(this.map.exitTerminal, p.pos) > INTERACT_RANGE * 2.2) {
+        this.cancelBypass(p, 'moved');
+        continue;
+      }
+      if (t >= p.bypass.endsAt) {
+        const id = p.bypass.target;
+        p.bypass = null;
+        if (this.delivered.has(id)) continue; // someone beat them to it
+        p.hotwire -= ENGINEER.BYPASS_COST;
+        p.stats.bypassed++;
+        this.delivered.add(id);
+        // If the item was on the floor or in someone's hands, it's moot now.
+        delete this.carrying[id];
+        delete this.collectPos[id];
+        this.broadcast({ t: 'bypassEnd', playerId: p.id, ok: true, collectableId: id });
+        this.broadcast({ t: 'delivered', collectableId: id, playerId: p.id });
+        this.send(p, { t: 'engCharges', hotwire: p.hotwire, scans: p.scans });
+        this.checkDoors();
+        this.broadcastObjectives();
+      }
+    }
   }
 
   checkDoors() {
@@ -396,6 +483,7 @@ class Room {
     killer.killReadyAt = now() + KILL_COOLDOWN;
     killer.stats.kills++;
     target.alive = false;
+    this.cancelBypass(target, 'interrupted');
     this.bodies.push({ id: target.id, x: target.pos.x, z: target.pos.z, charId: target.charId });
     // Drop whatever the victim carried.
     for (const [cid, holder] of Object.entries(this.carrying)) {
@@ -573,6 +661,8 @@ class Room {
       pts += p.stats.tasks * POINTS.TASK;
       pts += p.stats.kills * POINTS.KILL;
       pts += p.stats.revives * POINTS.REVIVE;
+      pts += (p.stats.hotwired || 0) * POINTS.HOTWIRE;
+      pts += (p.stats.bypassed || 0) * POINTS.BYPASS;
       if (p.stats.escaped) pts += POINTS.ESCAPE;
       if (p.stats.correctVote) pts += POINTS.EJECT_IMPOSTER_VOTE;
       if (winner === 'crew' && CREW_ALIGNED.includes(p.role)) pts += POINTS.WIN_CREW;
@@ -606,6 +696,7 @@ class Room {
         return this.gameOver('imposters', 'Time ran out — lockdown!');
       }
       this.updateBots(dt, t);
+      this.tickEngineer(t);
       // Carried collectables follow their holder.
       for (const [cid, holder] of Object.entries(this.carrying)) {
         const p = this.players.get(holder);
@@ -710,9 +801,16 @@ class Room {
           bot.workUntil = t + 4 + Math.random() * 5;
           if (goal.kind === 'station') {
             const sid = goal.id;
-            setTimeout(() => {
-              if (this.state === 'playing' && !p.escaped) this.completeStation(p, sid);
-            }, 4000);
+            // Engineer bots hotwire when they can — it's their whole point.
+            if (p.role === 'engineer' && p.alive && p.hotwire > 0 && t >= p.hotwireReadyAt) {
+              setTimeout(() => {
+                if (this.state === 'playing' && p.alive && !p.escaped) this.engHotwire(p);
+              }, 1200);
+            } else {
+              setTimeout(() => {
+                if (this.state === 'playing' && !p.escaped) this.completeStation(p, sid);
+              }, 4000);
+            }
           } else if (goal.kind === 'collect' && p.alive) {
             setTimeout(() => {
               if (this.state === 'playing' && p.alive) {
@@ -902,6 +1000,10 @@ wss.on('connection', (ws) => {
       case 'deliver': if (room) room.deliver(player); break;
       case 'kill': if (room) room.tryKill(player, room.players.get(msg.targetId)); break;
       case 'revive': if (room) room.tryRevive(player, String(msg.bodyId)); break;
+      case 'engHotwire': if (room) room.engHotwire(player); break;
+      case 'engScan': if (room) room.engScan(player); break;
+      case 'engBypass': if (room) room.engBypassStart(player); break;
+      case 'engBypassCancel': if (room) room.cancelBypass(player, 'cancelled'); break;
       case 'report': {
         if (!room || room.state !== 'playing' || !player.alive || player.escaped) break;
         const body = room.bodies.find(b => b.id === msg.bodyId);

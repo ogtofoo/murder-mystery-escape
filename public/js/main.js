@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
   PLAYER_SPEED, PLAYER_RADIUS, KILL_RANGE, REPORT_RANGE, INTERACT_RANGE,
   CHARACTERS, ABILITIES, KILL_COOLDOWN, THEMES, ROLES, CREW_ALIGNED,
-  MEDIC_REVIVE_COOLDOWN,
+  MEDIC_REVIVE_COOLDOWN, ENGINEER,
 } from '/shared/constants.js';
 import { generateMap, collideWithWalls } from '/shared/mapgen.js';
 import { store } from './store.js';
@@ -14,7 +14,7 @@ import { Net } from './net.js';
 import { buildCharacter, charDef, retint, setGhost, animateCharacter, makeBody } from './character.js';
 import {
   buildWorld, clearWorld, setDoorOpen, setStationDone, setCollectableVisible,
-  animateWorld, themeById,
+  setScanMark, animateWorld, themeById,
 } from './world.js';
 import { Controls } from './controls.js';
 import { openPuzzle } from './puzzles.js';
@@ -59,6 +59,10 @@ const state = {
   escaped: false,
   revivesLeft: 0,
   reviveReadyAt: 0,
+  hotwire: 0, hotwireReadyAt: 0,
+  scans: 0, scanReadyAt: 0,
+  scanUntil: 0, scanMarks: [], knownExitCode: null,
+  bypass: null,             // {endsAt, collectableId} while brute-forcing
   doors: [],                 // objective descriptors from the server
   openDoors: new Set(),
   stationsDone: new Set(),
@@ -355,6 +359,14 @@ net.on('gameStart', (msg) => {
   state.imposterIds = msg.imposterIds;
   state.timeLeft = msg.timeLimit;
   state.revivesLeft = msg.revives || 0;
+  state.hotwire = msg.hotwire || 0;
+  state.scans = msg.scans || 0;
+  state.hotwireReadyAt = 0;
+  state.scanReadyAt = 0;
+  state.scanUntil = 0;
+  state.scanMarks = [];
+  state.knownExitCode = null;
+  state.bypass = null;
   state.killReadyAt = performance.now() / 1000 + KILL_COOLDOWN / 2;
   state.names = new Map(msg.players.map(p => [p.id, p]));
 
@@ -410,7 +422,7 @@ function roleBriefing(msg) {
     case 'medic':
       return `You can REVIVE dead bodies (${msg.revives} charges). Stay close to the crew and undo the imposter's work.`;
     case 'engineer':
-      return 'Your repairs count double — every station you finish also completes another one. Open doors fast.';
+      return `You crack locks. HOTWIRE forces a station open with no puzzle (${msg.hotwire}×), SCAN reveals the key and code (${msg.scans}×), and at the exit terminal you can brute-force a missing item — slowly, and loudly.`;
     case 'trickster':
       return 'You win ALONE — and only if the crew votes YOU out. Act suspicious. Get ejected. Everyone else loses.';
     default:
@@ -447,8 +459,55 @@ net.on('doorOpen', (msg) => {
   if (msg.final) music.setIntensity(1);
 });
 
-net.on('engineerBonus', (msg) => {
-  if (msg.playerId === net.myId) toast('🔧 Engineer bonus — a second station auto-completed!');
+net.on('engCharges', (msg) => {
+  state.hotwire = msg.hotwire;
+  state.scans = msg.scans;
+  renderTaskList();
+});
+
+net.on('hotwired', (msg) => {
+  music.sting('task');
+  if (msg.playerId === net.myId) {
+    state.hotwireReadyAt = performance.now() / 1000 + ENGINEER.HOTWIRE_COOLDOWN;
+    toast('🔓 Hotwired — lock forced open!');
+  } else {
+    const who = state.names.get(msg.playerId)?.name || 'The Engineer';
+    toast(`🔓 ${who} hotwired a station.`);
+  }
+});
+
+net.on('scanReveal', (msg) => {
+  const t = performance.now() / 1000;
+  state.scanUntil = t + msg.duration;
+  state.scanMarks = msg.marks;
+  state.knownExitCode = msg.exitCode;
+  if (msg.byId === net.myId) state.scanReadyAt = t + ENGINEER.SCAN_COOLDOWN;
+  music.sting('pickup');
+  const who = msg.byId === net.myId ? 'You' : (state.names.get(msg.byId)?.name || 'The Engineer');
+  toast(`🔍 ${who} scanned the facility — key/code marked, exit code ${msg.exitCode}.`, 6000);
+  renderTaskList();
+});
+
+net.on('bypassStart', (msg) => {
+  const t = performance.now() / 1000;
+  const who = state.names.get(msg.playerId)?.name || 'The Engineer';
+  if (msg.playerId === net.myId) {
+    state.bypass = { endsAt: t + msg.duration, collectableId: msg.collectableId };
+    toast('🔓 Brute-forcing the terminal — HOLD STILL. Everyone can hear you!', 5000);
+  } else {
+    toast(`⚠ ${who} is brute-forcing the exit terminal!`, 5000);
+  }
+  // Everyone's music spikes — this is a loud, dangerous moment.
+  music.setIntensity(0.8);
+});
+
+net.on('bypassEnd', (msg) => {
+  if (msg.playerId === net.myId) {
+    state.bypass = null;
+    if (msg.ok) toast('🔓 Brute force succeeded!', 4000);
+    else toast(msg.reason === 'moved' ? '✗ Brute force cancelled — you moved.' : '✗ Brute force interrupted.', 4000);
+  }
+  if (msg.ok) music.sting('door');
 });
 
 net.on('pickup', (msg) => {
@@ -511,10 +570,13 @@ net.on('snap', (msg) => {
   }
 
   // Carried/loose collectables track their live positions.
+  const scanning = performance.now() / 1000 < state.scanUntil;
   for (const c of state.map.collectables) {
     const carried = !!state.carrying[c.id];
     const done = state.delivered.has(c.id);
     setCollectableVisible(world, c.id, !done && !carried, state.collectPos[c.id]);
+    // A live scan keeps the marker pinned to the item even while carried.
+    setScanMark(world, c.id, scanning && !done, state.collectPos[c.id]);
   }
 });
 
@@ -729,8 +791,9 @@ function renderTaskList() {
     mk(`💉 Revive bodies (${state.revivesLeft} left)`);
     mk('🛠 Repair stations to open doors');
   } else if (state.role === 'engineer') {
-    mk('🔧 Your repairs count double');
-    mk('🛠 Repair stations to open doors');
+    mk(`🔓 Hotwire a lock (${state.hotwire} left)`);
+    mk(`🔍 Scan for key/code (${state.scans} left)`);
+    if (state.knownExitCode) mk(`🔢 Exit code: ${state.knownExitCode}`);
   } else {
     mk('🛠 Repair stations to open doors');
     mk('🔑 Fetch the key + code, insert at the terminal');
@@ -765,17 +828,50 @@ function updateActionButtons() {
   killBtn.classList.toggle('cooldown', !killReady);
   killBtn.textContent = killReady ? 'KILL' : `${Math.ceil(state.killReadyAt - t)}s`;
 
-  state.abilityUI.forEach((ab, i) => {
-    const btn = $(`btn-ability-${i}`);
-    const show = canAct && state.role === 'imposter' && ab.uses > 0;
-    btn.classList.toggle('hidden', !show);
-    if (show) {
-      const cd = Math.ceil(ab.readyAt - t);
-      btn.classList.toggle('cooldown', cd > 0);
-      btn.textContent = cd > 0 ? `${ab.def.icon} ${cd}s` : `${ab.def.icon} ×${ab.uses}`;
+  if (state.role === 'engineer') {
+    // Slot 0 — Hotwire (contextual: station → force it; terminal → bypass)
+    const b0 = $('btn-ability-0');
+    const atTerminal = near.terminal && !state.delivered.has('key') || near.terminal && !state.delivered.has('code');
+    const canHotwire = canAct && state.hotwire > 0 && near.station;
+    const canBypass = canAct && near.terminal && atTerminal && state.hotwire >= ENGINEER.BYPASS_COST;
+    const showB0 = (canHotwire || canBypass || state.bypass) && canAct;
+    b0.classList.toggle('hidden', !showB0);
+    if (showB0) {
+      if (state.bypass) {
+        const left = Math.max(0, Math.ceil(state.bypass.endsAt - t));
+        b0.classList.add('cooldown');
+        b0.textContent = `🔓 ${left}s — HOLD`;
+      } else if (canBypass && !near.station) {
+        b0.classList.remove('cooldown');
+        b0.textContent = `🔓 BYPASS (${ENGINEER.BYPASS_COST})`;
+      } else {
+        const cd = Math.ceil(state.hotwireReadyAt - t);
+        b0.classList.toggle('cooldown', cd > 0);
+        b0.textContent = cd > 0 ? `🔓 ${cd}s` : `🔓 HOTWIRE ×${state.hotwire}`;
+      }
     }
-  });
-  for (let i = state.abilityUI.length; i < 2; i++) $(`btn-ability-${i}`)?.classList.add('hidden');
+    // Slot 1 — Scan
+    const b1 = $('btn-ability-1');
+    const showB1 = canAct && state.scans > 0;
+    b1.classList.toggle('hidden', !showB1);
+    if (showB1) {
+      const cd = Math.ceil(state.scanReadyAt - t);
+      b1.classList.toggle('cooldown', cd > 0);
+      b1.textContent = cd > 0 ? `🔍 ${cd}s` : `🔍 SCAN ×${state.scans}`;
+    }
+  } else {
+    state.abilityUI.forEach((ab, i) => {
+      const btn = $(`btn-ability-${i}`);
+      const show = canAct && state.role === 'imposter' && ab.uses > 0;
+      btn.classList.toggle('hidden', !show);
+      if (show) {
+        const cd = Math.ceil(ab.readyAt - t);
+        btn.classList.toggle('cooldown', cd > 0);
+        btn.textContent = cd > 0 ? `${ab.def.icon} ${cd}s` : `${ab.def.icon} ×${ab.uses}`;
+      }
+    });
+    for (let i = state.abilityUI.length; i < 2; i++) $(`btn-ability-${i}`)?.classList.add('hidden');
+  }
 
   $('blackout-overlay').classList.toggle('hidden',
     !(state.blackout && state.role !== 'imposter' && state.alive));
@@ -864,6 +960,8 @@ function updateMusicIntensity(t) {
   if (state.role === 'imposter' && state.nearest.victim) target += 0.3;
   else if (nearestD < 6 && state.alive) target += 0.12;
 
+  // Brute-forcing the terminal is the loudest thing in the game.
+  if (state.bypass) target = Math.max(target, 0.85);
   // Blackout & final door are max-tension moments.
   if (state.blackout) target += 0.3;
   if (state.openDoors.has('doorX')) target = Math.max(target, 0.9);
@@ -893,7 +991,7 @@ function doUse() {
     music.sting('task');
     net.send({ t: 'taskDone', stationId: st.id });
     if (state.role === 'imposter') toast('🎭 Nice acting… (and it did help the crew)');
-  });
+  }, state.role === 'engineer'); // engineer passive: minigames leak hints
 }
 
 function doGrab() {
@@ -917,8 +1015,20 @@ function doRevive() {
 function doReport() { if (state.nearest.body) net.send({ t: 'report', bodyId: state.nearest.body }); }
 function doMeeting() { if (state.nearest.button) net.send({ t: 'button' }); }
 function doAbility(i) {
+  const t = performance.now() / 1000;
+  // Engineer's two slots are role-innate, not shop abilities.
+  if (state.role === 'engineer') {
+    if (i === 0) {
+      if (state.bypass) return net.send({ t: 'engBypassCancel' });
+      if (state.nearest.station && state.hotwire > 0 && t >= state.hotwireReadyAt) return net.send({ t: 'engHotwire' });
+      if (state.nearest.terminal && state.hotwire >= ENGINEER.BYPASS_COST) return net.send({ t: 'engBypass' });
+    } else if (i === 1 && state.scans > 0 && t >= state.scanReadyAt) {
+      net.send({ t: 'engScan' });
+    }
+    return;
+  }
   const ab = state.abilityUI[i];
-  if (ab && ab.uses > 0 && performance.now() / 1000 >= ab.readyAt) net.send({ t: 'ability', abilityId: ab.id });
+  if (ab && ab.uses > 0 && t >= ab.readyAt) net.send({ t: 'ability', abilityId: ab.id });
 }
 
 $('btn-use').addEventListener('click', doUse);
@@ -1029,6 +1139,7 @@ const clock = new THREE.Clock();
 const camTarget = new THREE.Vector3();
 
 window.MME = { state, net, store, music };
+Object.defineProperty(window, 'MME_world', { get: () => world });
 
 function updateLocalPlayer(dt, t) {
   if (!myChar || !state.map) return;

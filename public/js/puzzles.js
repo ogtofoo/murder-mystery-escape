@@ -20,7 +20,7 @@ function status(body, msg, cls = '') {
 }
 
 // ---------------------------------------------------------------------------
-function wires(body, onSolve) {
+function wires(body, onSolve, hint) {
   const order = shuffle([0, 1, 2, 3]);
   const board = el('div', 'wires-board');
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -41,8 +41,15 @@ function wires(body, onSolve) {
       if (solvedSet.has(idx)) return;
       if (side === 'L') {
         left.querySelectorAll('.wire-node').forEach(x => x.classList.remove('active'));
+        right.querySelectorAll('.wire-node').forEach(x => x.classList.remove('hinted'));
         n.classList.add('active');
         active = { idx, node: n };
+        // Engineer passive: the matching socket lights up.
+        if (hint) {
+          right.querySelectorAll('.wire-node').forEach(x => {
+            if (+x.dataset.idx === idx) x.classList.add('hinted');
+          });
+        }
       } else if (active) {
         if (active.idx === idx) {
           solvedSet.add(idx);
@@ -81,7 +88,7 @@ function wires(body, onSolve) {
 }
 
 // ---------------------------------------------------------------------------
-function keypad(body, onSolve) {
+function keypad(body, onSolve, hint) {
   const code = Array.from({ length: 4 }, () => rand(10)).join('');
   const display = el('div', 'keypad-display', code);
   body.appendChild(display);
@@ -89,13 +96,15 @@ function keypad(body, onSolve) {
   body.appendChild(grid);
   status(body, 'Memorize the code…');
 
+  // Engineer passive: the code stays up much longer.
+  const showFor = hint ? 4500 : 1800;
   let entry = '';
   let hidden = false;
   setTimeout(() => {
     hidden = true;
     display.textContent = '····';
-    status(body, 'Now enter it.');
-  }, 1800);
+    status(body, hint ? `Now enter it. (hint: starts with ${code[0]})` : 'Now enter it.');
+  }, showFor);
 
   const press = (d) => {
     if (!hidden) return;
@@ -109,7 +118,7 @@ function keypad(body, onSolve) {
         entry = '';
         hidden = false;
         display.textContent = code;
-        setTimeout(() => { hidden = true; display.textContent = '····'; status(body, 'Now enter it.'); }, 1800);
+        setTimeout(() => { hidden = true; display.textContent = '····'; status(body, 'Now enter it.'); }, showFor);
       }
     }
   };
@@ -124,9 +133,10 @@ function keypad(body, onSolve) {
 }
 
 // ---------------------------------------------------------------------------
-function simon(body, onSolve) {
+function simon(body, onSolve, hint) {
   const colors = ['#e4405f', '#2ecc71', '#3498db', '#ffd166'];
-  const seq = Array.from({ length: 5 }, () => rand(4));
+  // Engineer passive: a shorter sequence to reproduce.
+  const seq = Array.from({ length: hint ? 3 : 5 }, () => rand(4));
   const grid = el('div', 'simon-grid');
   body.appendChild(grid);
   status(body, 'Watch the sequence…');
@@ -172,7 +182,7 @@ function simon(body, onSolve) {
 }
 
 // ---------------------------------------------------------------------------
-function fuses(body, onSolve) {
+function fuses(body, onSolve, hint) {
   const values = Array.from({ length: 5 }, () => 2 + rand(9));
   // Choose a random non-empty subset as the solution target.
   let mask = 0;
@@ -181,6 +191,13 @@ function fuses(body, onSolve) {
 
   const head = el('div', 'puzzle-status', `Flip breakers to total exactly ${target} amps.`);
   body.appendChild(head);
+  // Engineer passive: one breaker in the solution is named outright.
+  if (hint) {
+    const inSolution = [0, 1, 2, 3, 4].filter(i => (mask >> i) & 1);
+    const tell = inSolution[rand(inSolution.length)];
+    const h = el('div', 'puzzle-status good', `🔧 Analysis: breaker ${tell + 1} is part of the answer.`);
+    body.appendChild(h);
+  }
   const readout = el('div', 'keypad-display', '0 A');
   body.appendChild(readout);
   const states = [false, false, false, false, false];
@@ -202,11 +219,16 @@ function fuses(body, onSolve) {
 }
 
 // ---------------------------------------------------------------------------
-function levers(body, onSolve) {
+function levers(body, onSolve, hint) {
   const POSITIONS = 4;
   const targets = Array.from({ length: 4 }, () => rand(POSITIONS));
-  const current = targets.map(t => (t + 1 + rand(POSITIONS - 1)) % POSITIONS);
-  status(body, 'Click each lever until its handle lines up with the green mark.');
+  // Engineer passive: levers start closer to their marks.
+  const current = hint
+    ? targets.map(t => (t + 1) % POSITIONS)
+    : targets.map(t => (t + 1 + rand(POSITIONS - 1)) % POSITIONS);
+  status(body, hint
+    ? '🔧 Analysis: every lever is one click from alignment.'
+    : 'Click each lever until its handle lines up with the green mark.');
   const col = el('div', 'lever-col');
   body.appendChild(col);
 
@@ -237,7 +259,8 @@ function levers(body, onSolve) {
 // ---------------------------------------------------------------------------
 const BUILDERS = { wires, keypad, simon, fuses, levers };
 
-export function openPuzzle(type, container, onSolve) {
+// `hint` enables the Engineer's passive: every minigame leaks extra info.
+export function openPuzzle(type, container, onSolve, hint = false) {
   container.innerHTML = '';
-  (BUILDERS[type] || wires)(container, onSolve);
+  (BUILDERS[type] || wires)(container, onSolve, hint);
 }

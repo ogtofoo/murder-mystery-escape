@@ -48,7 +48,7 @@ trapped with everyone else, so at first they *have to help*:
 | **Crew** | 🛠 | Repair stations, fetch the key/code, escape. |
 | **Imposter** | 🔪 | Kill the crew before they escape. Must help in the start room. Only role that can use shop abilities. |
 | **Medic** | 💉 | Can **revive dead bodies** (2 charges, cooldown). Wins with the crew. |
-| **Engineer** | 🔧 | Every repair **counts double** — auto-completes a second station. Wins with the crew. |
+| **Engineer** | 🔧 | Cracks locks and reads hints — see below. Wins with the crew. |
 | **Trickster** | 🎭 | **Wins alone if the crew votes them out** — and then *everyone else loses*. Act suspicious. |
 
 With 7+ players there's a chance of **two imposters**; 9+ always has two.
@@ -56,6 +56,25 @@ Medic/Engineer appear from 5 players, Trickster from 6.
 
 Ghosts aren't useless: a murdered crewmate can still finish their stations to
 help the team open doors.
+
+### The Engineer 🔧
+
+A crewmate who brute-forces keys and locks and figures out hints:
+
+- **Passive — hints.** Every station minigame leaks extra information to
+  them: the matching wire socket glows, keypad codes stay on screen far
+  longer, memory sequences are shorter, one correct breaker is named, and
+  levers start one click from alignment.
+- **🔓 Hotwire** (3×, 18s cooldown) — force the station you're standing at
+  straight open. No puzzle at all.
+- **🔍 Scan** (2×, 30s cooldown) — reveal where the key and code are with
+  beacons visible **through walls**, and read out the exit code. Shared with
+  the whole crew; imposters and the Trickster get nothing.
+- **🔓 Bypass** — at the exit terminal, brute-force a **missing** key or code
+  directly into the lock. It costs 2 hotwire charges, takes 10 seconds of
+  standing perfectly still (move and it cancels), and **alerts every player
+  on the map** to your exact position. A last resort when the imposters are
+  sitting on the key room.
 
 ## Map themes 🗺
 
@@ -108,6 +127,9 @@ Points and unlocks persist in your browser.
 | Report / revive | R | REPORT / REVIVE | Y |
 | Meeting | T | 📢 button | Start |
 | Ability 1 / 2 | 1 / 2 | ability buttons | B / LB |
+
+For the Engineer, ability 1 is Hotwire (or Bypass at the exit terminal) and
+ability 2 is Scan. Shop abilities remain imposter-only.
 
 `E` is contextual: it inserts a carried item at the terminal, grabs a nearby
 key/code, or opens the station puzzle.
