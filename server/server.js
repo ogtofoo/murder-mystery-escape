@@ -254,6 +254,7 @@ class Room {
         pos: { x: s.x, z: s.z }, yaw: 0, anim: 0,
         alive: true, escaped: false,
         killReadyAt: now() + KILL_COOLDOWN / 2,
+        ejected: false,
         reviveReadyAt: 0,
         revivesLeft: p.role === 'medic' ? MEDIC_REVIVES : 0,
         hotwire: p.role === 'engineer' ? ENGINEER.HOTWIRE_CHARGES : 0,
@@ -618,7 +619,9 @@ class Room {
     });
     for (const p of this.players.values()) {
       if (p.isBot && p.alive && !p.escaped) {
-        p.bot.voteAt = now() + 5 + Math.random() * (MEETING_TIME - 12);
+        // Bots make their minds up quickly so meetings don't drag; the
+        // meeting still ends early once everyone has voted.
+        p.bot.voteAt = now() + 2 + Math.random() * 5;
       }
     }
   }
@@ -654,6 +657,7 @@ class Room {
     if (ejectedId) {
       const ejected = this.players.get(ejectedId);
       ejected.alive = false;
+      ejected.ejected = true;
       ejectedRole = ejected.role;
       if (ejectedRole === 'imposter') {
         for (const [voterId, t] of this.meeting.votes) {
@@ -747,8 +751,25 @@ class Room {
       if (winner === 'trickster' && p.id === tricksterId) pts += POINTS.WIN_TRICKSTER;
       pointsById[p.id] = pts;
     }
+    // Full end-of-match roster: every player, which side they were really on,
+    // whether they won, and how their match ended.
+    const teamOf = (role) =>
+      role === 'imposter' ? 'imposters' : role === 'trickster' ? 'trickster' : 'crew';
+    const roster = [...this.players.values()].map(p => ({
+      id: p.id,
+      name: p.name,
+      charId: p.charId,
+      isBot: p.isBot,
+      role: p.role,
+      team: teamOf(p.role),
+      won: winner === 'trickster' ? p.id === tricksterId : teamOf(p.role) === winner,
+      fate: p.escaped ? 'escaped' : p.ejected ? 'ejected' : p.alive ? 'survived' : 'killed',
+      points: pointsById[p.id],
+      stats: p.stats,
+    }));
+
     this.broadcast({
-      t: 'gameOver', winner, reason, tricksterId,
+      t: 'gameOver', winner, reason, tricksterId, roster,
       roles: Object.fromEntries([...this.players.values()].map(p => [p.id, p.role])),
       imposterIds: [...this.players.values()].filter(p => p.role === 'imposter').map(p => p.id),
       points: pointsById,
@@ -1125,10 +1146,10 @@ setInterval(() => {
       if (t >= p.bot.voteAt) {
         p.bot.voteAt = 0;
         const options = room.alive().filter(q => q.id !== p.id).map(q => q.id);
-        const pick = Math.random() < 0.55 || !options.length
-          ? 'skip'
-          : options[Math.floor(Math.random() * options.length)];
-        room.castVote(p, pick);
+        // A bot only ever accuses someone it actually watched commit a murder.
+        // Without eyewitness testimony it skips rather than lynching at random.
+        const sawIt = p.bot.accuse && options.includes(p.bot.accuse);
+        room.castVote(p, sawIt ? p.bot.accuse : 'skip');
       }
     }
   }

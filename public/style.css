@@ -254,3 +254,29 @@ body.touch #joystick-zone, body.touch #look-zone { display: block; }
   font-size: 11px; font-weight: 800; vertical-align: middle; letter-spacing: .5px;
 }
 body.touch .kbd { display: none; }
+
+/* ---------- end-of-match roster ---------- */
+#gameover-roster { margin-bottom: 16px; }
+.team-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin: 14px 0 6px; padding-bottom: 5px; border-bottom: 2px solid var(--team, #3a4763);
+}
+.team-head .team-name { font-weight: 800; font-size: 15px; color: var(--team, #eef2f8); }
+.team-badge { font-size: 10.5px; font-weight: 900; letter-spacing: 1px; border-radius: 999px; padding: 3px 10px; }
+.team-badge.won { background: rgba(95, 217, 138, .2); color: #7dffb0; border: 1px solid #2ecc71; }
+.team-badge.lost { background: rgba(140, 152, 172, .16); color: #97a3b8; border: 1px solid #55627a; }
+.roster-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px;
+  font-size: 13px; background: #131a29; margin-bottom: 4px; opacity: .72;
+}
+.roster-row.won { opacity: 1; background: #162431; }
+.roster-row.me { outline: 1px solid #ffd166; }
+.roster-row .dot { width: 18px; height: 21px; border-radius: 46% 46% 40% 40%; flex-shrink: 0; }
+.roster-row .rname { flex: 1; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roster-row .rname .you { color: #ffd166; font-weight: 800; font-size: 11px; }
+.roster-row .rrole { font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.roster-row .rfate { font-size: 11px; color: #8b96ab; white-space: nowrap; min-width: 82px; text-align: right; }
+.roster-row .rpts { font-size: 11.5px; font-weight: 800; color: #ffd166; min-width: 38px; text-align: right; }
+@media (max-width: 520px) {
+  .roster-row .rfate { display: none; }
+}

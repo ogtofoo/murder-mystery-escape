@@ -732,14 +732,8 @@ net.on('gameOver', (msg) => {
     if (s.correctVote) mkRow('Caught an imposter', '✓');
   }
   mkRow('Total balance', `${store.points} ⭐`);
-  const imps = msg.imposterIds.map(id => state.names.get(id)?.name || '???').join(', ');
-  mkRow('The imposters were', imps, 'imp');
-  // Reveal any special roles
-  for (const [pid, role] of Object.entries(msg.roles || {})) {
-    if (['medic', 'engineer', 'trickster'].includes(role)) {
-      mkRow(`${ROLES[role].icon} ${ROLES[role].name}`, state.names.get(pid)?.name || '???');
-    }
-  }
+
+  renderRoster(msg);
   showModal('gameover-modal');
   controls.releasePointer();
 });
@@ -802,6 +796,78 @@ function renderTaskList() {
   } else {
     mk('🛠 Repair stations to open doors');
     mk('🔑 Fetch the key + code, insert at the terminal');
+  }
+}
+
+// End-of-match roster — every player on every side, won or lost.
+const FATE = {
+  escaped:  { icon: '🚪', label: 'escaped' },
+  survived: { icon: '🙂', label: 'survived' },
+  killed:   { icon: '💀', label: 'murdered' },
+  ejected:  { icon: '🗳', label: 'voted out' },
+};
+
+function renderRoster(msg) {
+  const box = $('gameover-roster');
+  box.innerHTML = '';
+  const roster = msg.roster || [];
+  if (!roster.length) return;
+
+  const teams = [
+    { id: 'crew', title: 'Crew', icon: '🛠', color: '#5fd98a' },
+    { id: 'imposters', title: 'Imposters', icon: '🔪', color: '#ff5f7a' },
+    { id: 'trickster', title: 'Trickster', icon: '🎭', color: '#c792ea' },
+  ];
+
+  // Winners are announced first.
+  teams.sort((a, b) => (b.id === msg.winner) - (a.id === msg.winner));
+
+  for (const team of teams) {
+    const members = roster.filter(p => p.team === team.id);
+    if (!members.length) continue;
+    const won = members[0].won;
+
+    const head = document.createElement('div');
+    head.className = 'team-head' + (won ? ' won' : ' lost');
+    head.style.setProperty('--team', team.color);
+    const name = document.createElement('span');
+    name.className = 'team-name';
+    name.textContent = `${team.icon} ${team.title}`;
+    const badge = document.createElement('span');
+    badge.className = 'team-badge ' + (won ? 'won' : 'lost');
+    badge.textContent = won ? 'WINNERS' : 'DEFEATED';
+    head.append(name, badge);
+    box.appendChild(head);
+
+    for (const p of members) {
+      const row = document.createElement('div');
+      row.className = 'roster-row' + (p.won ? ' won' : '') + (p.id === net.myId ? ' me' : '');
+      const dot = document.createElement('div');
+      dot.className = 'dot';
+      dot.style.background = charDef(p.charId).body;
+      const nm = document.createElement('span');
+      nm.className = 'rname';
+      nm.textContent = p.name + (p.isBot ? ' 🤖' : '');
+      if (p.id === net.myId) {
+        const you = document.createElement('span');
+        you.className = 'you';
+        you.textContent = ' (you)';
+        nm.appendChild(you);
+      }
+      const role = document.createElement('span');
+      role.className = 'rrole';
+      role.textContent = `${ROLES[p.role].icon} ${ROLES[p.role].name}`;
+      role.style.color = ROLES[p.role].color;
+      const fate = FATE[p.fate] || FATE.survived;
+      const fateEl = document.createElement('span');
+      fateEl.className = 'rfate';
+      fateEl.textContent = `${fate.icon} ${fate.label}`;
+      const pts = document.createElement('span');
+      pts.className = 'rpts';
+      pts.textContent = `+${p.points}`;
+      row.append(dot, nm, role, fateEl, pts);
+      box.appendChild(row);
+    }
   }
 }
 

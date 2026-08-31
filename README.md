@@ -70,8 +70,10 @@ every imposter — human and bot alike:
   still fair game.
 
 Crew bots hold up their end too: one that witnesses a murder reports the body
-within a couple of seconds and names the killer with its vote in the meeting
-that follows. Bots also report corpses they stumble across on patrol.
+within a couple of seconds, and names that killer with its vote in the meeting
+that follows. Bots also report corpses they stumble across on patrol. Crucially
+a bot **only ever accuses someone it actually watched kill** — with no
+eyewitness testimony it skips rather than lynching an innocent at random.
 
 ### The Engineer 🔧
 
@@ -131,6 +133,14 @@ an imposter out). Spend them in the **Shop** on:
   🌑 **Blackout** (shrink crew vision) · 🎭 **Shapeshift** (copy a crewmate).
 
 Points and unlocks persist in your browser.
+
+## The results screen 🏁
+
+When the match ends, everyone's cards go face-up. The screen lists **every
+player on every side** — winning team first — showing each one's real role,
+how their match ended (escaped / survived / murdered / voted out) and the
+points they earned. Teams are stamped WINNERS or DEFEATED, and your own row is
+highlighted, so it is immediately clear who was lying to you the whole time.
 
 ## Controls
 
