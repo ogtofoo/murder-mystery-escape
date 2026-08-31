@@ -347,3 +347,33 @@ export function roomAt(map, x, z) {
   }
   return null;
 }
+
+// Can `a` see `b`? Slab-method segment test against every wall, crate and
+// closed door. Used for the witness rule: you may only murder someone when
+// nobody else can actually SEE you, rather than merely being nearby.
+export function hasLineOfSight(map, a, b, openDoorIds = new Set()) {
+  const dx = b.x - a.x, dz = b.z - a.z;
+  const obstacles = [...map.walls, ...map.crates];
+  for (const d of map.doors) if (!openDoorIds.has(d.id)) obstacles.push(d);
+
+  for (const o of obstacles) {
+    const minX = o.x - o.w / 2, maxX = o.x + o.w / 2;
+    const minZ = o.z - o.d / 2, maxZ = o.z + o.d / 2;
+    let t0 = 0, t1 = 1, blocked = true;
+
+    for (const [origin, delta, lo, hi] of [[a.x, dx, minX, maxX], [a.z, dz, minZ, maxZ]]) {
+      if (Math.abs(delta) < 1e-9) {
+        if (origin < lo || origin > hi) { blocked = false; break; } // parallel & outside
+        continue;
+      }
+      let tA = (lo - origin) / delta;
+      let tB = (hi - origin) / delta;
+      if (tA > tB) { const tmp = tA; tA = tB; tB = tmp; }
+      t0 = Math.max(t0, tA);
+      t1 = Math.min(t1, tB);
+      if (t0 > t1) { blocked = false; break; }
+    }
+    if (blocked) return false; // the segment crosses this obstacle
+  }
+  return true;
+}

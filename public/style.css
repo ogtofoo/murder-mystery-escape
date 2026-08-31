@@ -159,10 +159,21 @@ body.touch #joystick-zone, body.touch #look-zone { display: block; }
 #dead-banner { position: absolute; bottom: 12%; left: 50%; transform: translateX(-50%); background: rgba(12,16,26,.85); border-radius: 999px; padding: 10px 22px; color: #b9c6dd; font-size: 14px; white-space: nowrap; }
 
 /* ---------- overlays ---------- */
-#countdown-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(6,9,16,.55); }
+#countdown-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(6,9,16,.55); pointer-events: none; }
 #countdown-num { font-size: 120px; font-weight: 900; text-shadow: 0 8px 40px rgba(0,0,0,.6); }
-#role-reveal { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(6,9,16,.88); }
-.reveal-inner { text-align: center; animation: reveal-pop .5s ease; }
+/* Non-blocking: you can walk, look and click straight through the reveal. */
+#role-reveal {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(6,9,16,.88); pointer-events: none; transition: opacity .45s ease, background .45s ease;
+}
+#role-reveal.fading { opacity: 0; }
+/* Once you start moving it shrinks to a top banner and gets out of the way. */
+#role-reveal.compact { background: transparent; align-items: flex-start; padding-top: 12vh; }
+#role-reveal.compact .reveal-inner { transform: scale(.62); opacity: .92; }
+#role-reveal.compact #reveal-sub { display: none; }
+#role-reveal.compact .reveal-inner h2 { text-shadow: 0 4px 24px rgba(0,0,0,.9); }
+.reveal-inner { text-align: center; animation: reveal-pop .5s ease; transition: transform .35s ease, opacity .35s ease; }
+.reveal-hint { margin-top: 14px; font-size: 13px; color: #8b96ab; }
 .reveal-inner h2 { font-size: 46px; margin-bottom: 10px; }
 .reveal-inner.crew h2 { color: #5fd98a; }
 .reveal-inner.imposter h2 { color: #ff5f7a; }
@@ -235,3 +246,11 @@ body.touch #joystick-zone, body.touch #look-zone { display: block; }
   #meeting-players { grid-template-columns: 1fr; }
   .action-btn { min-width: 64px; height: 54px; font-size: 15px; }
 }
+
+/* Keyboard hint chips printed on the on-screen action buttons. */
+.kbd {
+  display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px;
+  background: rgba(0,0,0,.32); border: 1px solid rgba(255,255,255,.28);
+  font-size: 11px; font-weight: 800; vertical-align: middle; letter-spacing: .5px;
+}
+body.touch .kbd { display: none; }

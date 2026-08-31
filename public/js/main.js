@@ -407,8 +407,7 @@ net.on('gameStart', (msg) => {
   inner.className = `reveal-inner ${msg.role}`;
   $('reveal-title').textContent = roleDef.name.toUpperCase();
   $('reveal-sub').textContent = roleBriefing(msg);
-  reveal.classList.remove('hidden');
-  setTimeout(() => reveal.classList.add('hidden'), 3800);
+  showReveal();
 });
 
 function roleBriefing(msg) {
@@ -613,6 +612,12 @@ net.on('revived', (msg) => {
   }
 });
 
+net.on('killBlocked', (msg) => {
+  toast(msg.reason === 'startroom'
+    ? '🔒 No kills yet — you are all locked in together. Help open the first door.'
+    : '👀 Too many witnesses — get them alone.', 3500);
+});
+
 net.on('escaped', (msg) => {
   const name = state.names.get(msg.playerId)?.name || 'Someone';
   if (msg.playerId === net.myId) {
@@ -800,17 +805,66 @@ function renderTaskList() {
   }
 }
 
+// Buttons carry the prompt for whichever device the player is actually using:
+// keyboard keys normally, Xbox face buttons once they pick up a controller,
+// and nothing at all on touch (the button IS the control).
+function setBtn(id, label, action) {
+  const el = $(id);
+  const key = controls.promptFor(action);
+  const html = label + (key ? ` <b class="kbd">${key}</b>` : '');
+  if (el._html !== html) { el.innerHTML = html; el._html = html; }
+}
+
+// The role reveal never blocks play: the first input shrinks it to a banner.
+let revealTimers = [];
+function dismissReveal(full) {
+  const r = $('role-reveal');
+  if (r.classList.contains('hidden')) return;
+  if (full) {
+    r.classList.add('fading');
+    setTimeout(() => { r.classList.add('hidden'); r.classList.remove('fading', 'compact'); }, 450);
+  } else {
+    r.classList.add('compact');
+  }
+}
+function showReveal() {
+  const r = $('role-reveal');
+  revealTimers.forEach(clearTimeout);
+  r.classList.remove('hidden', 'fading', 'compact');
+  revealTimers = [
+    setTimeout(() => dismissReveal(false), 2600),
+    setTimeout(() => dismissReveal(true), 4200),
+  ];
+}
+
+// Any deliberate input also clears the reveal immediately.
+for (const ev of ['keydown', 'pointerdown', 'touchstart']) {
+  window.addEventListener(ev, () => {
+    if (state.screen === 'game') dismissReveal(false);
+  }, { passive: true });
+}
+
 function updateActionButtons() {
   const t = performance.now() / 1000;
   const near = state.nearest;
   const canAct = state.phase === 'playing' && state.alive && !state.escaped && !state.puzzleOpen;
   const canUse = state.phase === 'playing' && !state.escaped && !state.puzzleOpen;
 
-  $('btn-use').classList.toggle('hidden', !(canUse && near.station));
-  $('btn-grab').classList.toggle('hidden', !(canAct && near.collectable));
-  $('btn-deliver').classList.toggle('hidden', !(canAct && near.terminal && myCarried()));
-  $('btn-report').classList.toggle('hidden', !(canAct && near.body));
-  $('btn-meeting').classList.toggle('hidden', !(canAct && near.button));
+  const showUse = canUse && near.station;
+  const showGrab = canAct && near.collectable;
+  const showDeliver = canAct && near.terminal && myCarried();
+  $('btn-use').classList.toggle('hidden', !showUse);
+  $('btn-grab').classList.toggle('hidden', !showGrab);
+  $('btn-deliver').classList.toggle('hidden', !showDeliver);
+  if (showUse) setBtn('btn-use', 'USE', 'use');
+  if (showGrab) setBtn('btn-grab', 'GRAB', 'use');
+  if (showDeliver) setBtn('btn-deliver', 'INSERT', 'use');
+  const showReport = canAct && near.body;
+  $('btn-report').classList.toggle('hidden', !showReport);
+  if (showReport) setBtn('btn-report', 'REPORT', 'report');
+  const showMeeting = canAct && near.button;
+  $('btn-meeting').classList.toggle('hidden', !showMeeting);
+  if (showMeeting) setBtn('btn-meeting', '📢', 'meeting');
 
   const reviveBtn = $('btn-revive');
   const canRevive = canAct && state.role === 'medic' && near.body && state.revivesLeft > 0;
@@ -818,7 +872,8 @@ function updateActionButtons() {
   if (canRevive) {
     const cd = Math.ceil(state.reviveReadyAt - t);
     reviveBtn.classList.toggle('cooldown', cd > 0);
-    reviveBtn.textContent = cd > 0 ? `${cd}s` : `REVIVE ×${state.revivesLeft}`;
+    if (cd > 0) reviveBtn.textContent = `${cd}s`;
+    else setBtn('btn-revive', `REVIVE ×${state.revivesLeft}`, 'report');
   }
 
   const killBtn = $('btn-kill');
@@ -826,7 +881,8 @@ function updateActionButtons() {
   killBtn.classList.toggle('hidden', !showKill);
   const killReady = t >= state.killReadyAt;
   killBtn.classList.toggle('cooldown', !killReady);
-  killBtn.textContent = killReady ? 'KILL' : `${Math.ceil(state.killReadyAt - t)}s`;
+  if (killReady) setBtn('btn-kill', 'KILL', 'kill');
+  else killBtn.textContent = `${Math.ceil(state.killReadyAt - t)}s`;
 
   if (state.role === 'engineer') {
     // Slot 0 — Hotwire (contextual: station → force it; terminal → bypass)
@@ -843,11 +899,12 @@ function updateActionButtons() {
         b0.textContent = `🔓 ${left}s — HOLD`;
       } else if (canBypass && !near.station) {
         b0.classList.remove('cooldown');
-        b0.textContent = `🔓 BYPASS (${ENGINEER.BYPASS_COST})`;
+        setBtn('btn-ability-0', `🔓 BYPASS (${ENGINEER.BYPASS_COST})`, 'ability0');
       } else {
         const cd = Math.ceil(state.hotwireReadyAt - t);
         b0.classList.toggle('cooldown', cd > 0);
-        b0.textContent = cd > 0 ? `🔓 ${cd}s` : `🔓 HOTWIRE ×${state.hotwire}`;
+        if (cd > 0) b0.textContent = `🔓 ${cd}s`;
+        else setBtn('btn-ability-0', `🔓 HOTWIRE ×${state.hotwire}`, 'ability0');
       }
     }
     // Slot 1 — Scan
@@ -857,7 +914,8 @@ function updateActionButtons() {
     if (showB1) {
       const cd = Math.ceil(state.scanReadyAt - t);
       b1.classList.toggle('cooldown', cd > 0);
-      b1.textContent = cd > 0 ? `🔍 ${cd}s` : `🔍 SCAN ×${state.scans}`;
+      if (cd > 0) b1.textContent = `🔍 ${cd}s`;
+      else setBtn('btn-ability-1', `🔍 SCAN ×${state.scans}`, 'ability1');
     }
   } else {
     state.abilityUI.forEach((ab, i) => {
@@ -867,7 +925,8 @@ function updateActionButtons() {
       if (show) {
         const cd = Math.ceil(ab.readyAt - t);
         btn.classList.toggle('cooldown', cd > 0);
-        btn.textContent = cd > 0 ? `${ab.def.icon} ${cd}s` : `${ab.def.icon} ×${ab.uses}`;
+        if (cd > 0) btn.textContent = `${ab.def.icon} ${cd}s`;
+        else setBtn(`btn-ability-${i}`, `${ab.def.icon} ×${ab.uses}`, `ability${i}`);
       }
     });
     for (let i = state.abilityUI.length; i < 2; i++) $(`btn-ability-${i}`)?.classList.add('hidden');
@@ -1127,7 +1186,12 @@ $('btn-shop-back').addEventListener('click', () => showScreen('menu'));
 $('btn-leave').addEventListener('click', () => { net.send({ t: 'leave' }); showScreen('menu'); refreshPoints(); });
 $('btn-addbot').addEventListener('click', () => net.send({ t: 'addBot' }));
 $('btn-start').addEventListener('click', () => net.send({ t: 'start' }));
-$('btn-back-lobby').addEventListener('click', () => hideModal('gameover-modal'));
+$('btn-back-lobby').addEventListener('click', () => {
+  hideModal('gameover-modal');
+  resetMatchState();
+  showScreen('lobby');       // switch instantly; the server confirms right after
+  net.send({ t: 'returnToLobby' });
+});
 
 refreshPoints();
 $('btn-music').classList.toggle('off', !store.profile.musicOn);
@@ -1138,7 +1202,7 @@ $('btn-music').classList.toggle('off', !store.profile.musicOn);
 const clock = new THREE.Clock();
 const camTarget = new THREE.Vector3();
 
-window.MME = { state, net, store, music };
+window.MME = { state, net, store, music, controls };
 Object.defineProperty(window, 'MME_world', { get: () => world });
 
 function updateLocalPlayer(dt, t) {
@@ -1156,6 +1220,7 @@ function updateLocalPlayer(dt, t) {
   if (state.sprintUntil && t < state.sprintUntil) speed *= 1.6;
 
   const moving = (move.x !== 0 || move.z !== 0);
+  if (moving) dismissReveal(false);
   if (moving) {
     const sin = Math.sin(state.camYaw), cos = Math.cos(state.camYaw);
     const wx = move.x * cos + move.z * sin;

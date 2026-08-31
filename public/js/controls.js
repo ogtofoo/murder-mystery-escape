@@ -12,6 +12,9 @@ export class Controls {
     this.isTouch = false;
     this.gamepadIndex = null;
     this.prevPadButtons = [];
+    // Which device the player last actually used, so the HUD can label
+    // buttons with the right prompt (keyboard key vs. controller face button).
+    this.lastDevice = 'kbd';   // 'kbd' | 'pad' | 'touch'
 
     this.initKeyboard();
     this.initMouse();
@@ -35,10 +38,18 @@ export class Controls {
 
   // ---------- keyboard ----------
   initKeyboard() {
-    const actionKeys = { KeyE: 'use', KeyQ: 'kill', KeyR: 'report', KeyT: 'meeting', Digit1: 'ability0', Digit2: 'ability1' };
+    // 'use' is the contextual primary action (repair / grab / insert).
+    // Space and E both fire it; F and Q both kill.
+    const actionKeys = {
+      KeyE: 'use', Space: 'use',
+      KeyF: 'kill', KeyQ: 'kill',
+      KeyR: 'report', KeyT: 'meeting',
+      Digit1: 'ability0', Digit2: 'ability1',
+    };
     window.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'INPUT') return;
       this.keys.add(e.code);
+      this.lastDevice = 'kbd';
       if (actionKeys[e.code]) { e.preventDefault(); this.fire(actionKeys[e.code]); }
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -66,6 +77,7 @@ export class Controls {
     });
     window.addEventListener('mousemove', (e) => {
       if (this.pointerLocked) {
+        if (e.movementX || e.movementY) this.lastDevice = 'kbd';
         this.lookDX += e.movementX * 0.0026;
         this.lookDY += e.movementY * 0.0022;
       }
@@ -87,6 +99,7 @@ export class Controls {
 
     const markTouch = () => {
       if (!this.isTouch) { this.isTouch = true; document.body.classList.add('touch'); }
+      this.lastDevice = 'touch';
     };
     window.addEventListener('touchstart', markTouch, { once: true, passive: true });
 
@@ -151,9 +164,14 @@ export class Controls {
 
   // ---------- gamepad ----------
   initGamepad() {
-    window.addEventListener('gamepadconnected', (e) => { this.gamepadIndex = e.gamepad.index; });
+    window.addEventListener('gamepadconnected', (e) => {
+      if (e?.gamepad) this.gamepadIndex = e.gamepad.index;
+    });
     window.addEventListener('gamepaddisconnected', (e) => {
-      if (this.gamepadIndex === e.gamepad.index) this.gamepadIndex = null;
+      if (e?.gamepad && this.gamepadIndex === e.gamepad.index) {
+        this.gamepadIndex = null;
+        this.lastDevice = 'kbd';
+      }
     });
   }
 
@@ -163,6 +181,8 @@ export class Controls {
     if (!pad) return null;
     const dead = (v) => (Math.abs(v) < 0.15 ? 0 : v);
     const move = { x: dead(pad.axes[0]), z: dead(pad.axes[1]) };
+    // Any real stick or button activity hands the prompts over to the pad.
+    if (move.x || move.z || pad.buttons.some(b => b.pressed)) this.lastDevice = 'pad';
     this.lookDX += dead(pad.axes[2] ?? 0) * 0.045;
     this.lookDY += dead(pad.axes[3] ?? 0) * 0.035;
     // Edge-detect buttons: A=use, X=kill, Y=report, B=ability0, LB=ability1, Start=meeting
@@ -173,6 +193,15 @@ export class Controls {
       this.prevPadButtons[idx] = pressed;
     }
     return move;
+  }
+
+  // Prompt label for an action on whichever device is currently in use.
+  // Xbox face buttons: A=use, X=kill, Y=report, B=ability1, LB=ability2.
+  promptFor(action) {
+    if (this.lastDevice === 'touch') return '';
+    const pad = { use: 'A', kill: 'X', report: 'Y', meeting: '☰', ability0: 'B', ability1: 'LB' };
+    const kbd = { use: 'E', kill: 'Q', report: 'R', meeting: 'T', ability0: '1', ability1: '2' };
+    return (this.lastDevice === 'pad' ? pad : kbd)[action] || '';
   }
 
   // Combined movement vector (screen space; caller rotates by camera yaw).

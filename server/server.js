@@ -15,9 +15,9 @@ import {
   MEETING_COOLDOWN, COUNTDOWN_TIME, MIN_PLAYERS, MAX_PLAYERS, ESCAPE_HOLD,
   imposterCount, POINTS, CHARACTERS, ABILITIES, MAX_EQUIPPED_ABILITIES, BOT_NAMES,
   CREW_ALIGNED, MEDIC_REVIVES, MEDIC_REVIVE_COOLDOWN, rollSpecialRoles, THEMES,
-  ENGINEER,
+  ENGINEER, WITNESS_RADIUS, WITNESS_LIMIT, BOT_REPORT_DELAY,
 } from '../shared/constants.js';
-import { generateMap, nearestWaypoint, collideWithWalls } from '../shared/mapgen.js';
+import { generateMap, nearestWaypoint, collideWithWalls, hasLineOfSight } from '../shared/mapgen.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -270,7 +270,8 @@ class Room {
         const def = ABILITIES.find(a => a.id === ab);
         if (def) p.abilityState[ab] = { uses: def.uses, readyAt: 0 };
       }
-      if (p.isBot) p.bot = { path: [], target: null, mode: 'task', workUntil: 0, fleeing: false };
+      if (p.isBot) p.bot = { path: [], target: null, mode: 'task', workUntil: 0, fleeing: false,
+                             reportAt: 0, reportBody: null, sawKiller: null, accuse: null };
     });
 
     for (const p of all) {
@@ -474,11 +475,38 @@ class Room {
 
   // ---- combat ----
 
+  // Why a kill is or isn't allowed. Shared by players and bots so the rules
+  // are identical for both.
+  killBlockReason(killer, target) {
+    if (this.state !== 'playing') return 'state';
+    if (!killer || killer.role !== 'imposter' || !killer.alive || killer.escaped) return 'role';
+    if (!target || !target.alive || target.escaped || target.role === 'imposter') return 'target';
+    if (now() < killer.killReadyAt) return 'cooldown';
+    // Everyone starts locked in one room together — the imposter has to help
+    // open the first door before they can start hunting.
+    if (!this.openDoors.has('doorA')) return 'startroom';
+    // You cannot murder someone in plain view of a crowd. Bystanders only
+    // count if they are close AND have an unobstructed line of sight, so
+    // killing around a corner is still on the table.
+    let bystanders = 0;
+    for (const q of this.players.values()) {
+      if (q === killer || q === target) continue;
+      if (!q.alive || q.escaped || q.role === 'imposter') continue;
+      if (dist(q, target) > WITNESS_RADIUS && dist(q, killer) > WITNESS_RADIUS) continue;
+      if (hasLineOfSight(this.map, q.pos, target.pos, this.openDoors)) bystanders++;
+    }
+    if (bystanders >= WITNESS_LIMIT) return 'witnesses';
+    return null;
+  }
+
   tryKill(killer, target) {
-    if (this.state !== 'playing') return;
-    if (!killer || killer.role !== 'imposter' || !killer.alive || killer.escaped) return;
-    if (!target || !target.alive || target.escaped || target.role === 'imposter') return;
-    if (now() < killer.killReadyAt) return;
+    const blocked = this.killBlockReason(killer, target);
+    if (blocked) {
+      if (killer && !killer.isBot && ['startroom', 'witnesses'].includes(blocked)) {
+        this.send(killer, { t: 'killBlocked', reason: blocked });
+      }
+      return;
+    }
     if (dist(killer, target) > KILL_RANGE * 1.6) return;
     killer.killReadyAt = now() + KILL_COOLDOWN;
     killer.stats.kills++;
@@ -491,7 +519,56 @@ class Room {
     }
     killer.pos = { x: target.pos.x, z: target.pos.z };
     this.broadcast({ t: 'killed', victimId: target.id, killerId: killer.id, x: target.pos.x, z: target.pos.z });
+    this.witnessKill(killer, target);
     this.checkWin();
+  }
+
+  // Crew bots near a murder see it happen and go report it. Without this,
+  // an imposter bot could kill in plain sight and nothing would come of it.
+  witnessKill(killer, victim) {
+    for (const q of this.players.values()) {
+      if (!q.isBot || !q.alive || q.escaped) continue;
+      if (!CREW_ALIGNED.includes(q.role)) continue;
+      if (dist(q, victim) > WITNESS_RADIUS) continue;
+      const [lo, hi] = BOT_REPORT_DELAY;
+      q.bot.reportAt = now() + lo + Math.random() * (hi - lo);
+      q.bot.reportBody = victim.id;
+      q.bot.sawKiller = killer.id;
+    }
+  }
+
+  // A bot standing near a body (witnessed or simply stumbled upon) reports it.
+  tickBotReports(t) {
+    for (const p of this.players.values()) {
+      if (!p.isBot || !p.alive || p.escaped || this.state !== 'playing') continue;
+      const bot = p.bot;
+      if (!bot) continue;
+
+      // Stumbling across a corpse also triggers a report.
+      if (!bot.reportAt) {
+        for (const b of this.bodies) {
+          if (distP(b, p.pos) <= REPORT_RANGE) {
+            const [lo, hi] = BOT_REPORT_DELAY;
+            bot.reportAt = t + lo + Math.random() * (hi - lo);
+            bot.reportBody = b.id;
+            break;
+          }
+        }
+      }
+
+      if (bot.reportAt && t >= bot.reportAt) {
+        const body = this.bodies.find(b => b.id === bot.reportBody);
+        bot.reportAt = 0;
+        // Someone else may have already called it in.
+        if (body && this.state === 'playing') {
+          // Bots that actually saw the killer will name them in the meeting.
+          if (bot.sawKiller) bot.accuse = bot.sawKiller;
+          this.startMeeting(p, body.id);
+        }
+        bot.reportBody = null;
+        bot.sawKiller = null;
+      }
+    }
   }
 
   tryRevive(medic, bodyId) {
@@ -597,7 +674,7 @@ class Room {
     this.meetingAvailableAt = now() + MEETING_COOLDOWN;
     for (const p of this.players.values()) {
       if (p.role === 'imposter') p.killReadyAt = now() + KILL_COOLDOWN / 2;
-      if (p.isBot) p.bot.path = [];
+      if (p.isBot) { p.bot.path = []; p.bot.accuse = null; p.bot.reportAt = 0; p.bot.reportBody = null; p.bot.sawKiller = null; }
     }
 
     // TRICKSTER: voted out = they win, everyone else loses.
@@ -677,14 +754,20 @@ class Room {
       points: pointsById,
       stats: Object.fromEntries([...this.players.values()].map(p => [p.id, p.stats])),
     });
-    setTimeout(() => {
-      if (this.state !== 'over') return;
-      this.state = 'lobby';
-      this.broadcast(this.lobbyState());
-    }, 12000);
+    // Fallback only — players who click "Back to Lobby" reset it immediately.
+    setTimeout(() => this.returnToLobby(), 12000);
   }
 
   // ---- per-tick ----
+
+  // Any player dismissing the results screen sends everyone back at once,
+  // instead of waiting out the fallback timer.
+  returnToLobby() {
+    if (this.state !== 'over') return;
+    this.state = 'lobby';
+    this.bodies = [];
+    this.broadcast(this.lobbyState());
+  }
 
   tick(dt) {
     const t = now();
@@ -697,6 +780,7 @@ class Room {
       }
       this.updateBots(dt, t);
       this.tickEngineer(t);
+      this.tickBotReports(t);
       // Carried collectables follow their holder.
       for (const [cid, holder] of Object.entries(this.carrying)) {
         const p = this.players.get(holder);
@@ -957,6 +1041,7 @@ wss.on('connection', (ws) => {
         target.addPlayer(player);
         break;
       }
+      case 'returnToLobby': if (room) room.returnToLobby(); break;
       case 'leave': if (room) room.removePlayer(player.id); break;
       case 'setChar': {
         if (CHARACTERS.some(c => c.id === msg.charId)) player.charId = msg.charId;

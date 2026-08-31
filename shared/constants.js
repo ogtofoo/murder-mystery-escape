@@ -161,3 +161,10 @@ export const ABILITIES = [
 export const MAX_EQUIPPED_ABILITIES = 2;
 
 export const BOT_NAMES = ['Waldo', 'Pickle', 'Noodle', 'Biscuit', 'Gizmo', 'Taco', 'Pudding', 'Wiggles', 'Sprout'];
+
+// ---------------------------------------------------------------------------
+// Murder rules. Killing is meant to be a private act: the imposter has to get
+// their victim alone. These are enforced server-side for humans AND bots.
+export const WITNESS_RADIUS = 14;   // how far a living crewmate can "see" (needs line of sight too)
+export const WITNESS_LIMIT = 2;     // this many bystanders makes a kill impossible
+export const BOT_REPORT_DELAY = [0.6, 2.0]; // bots take a beat to react to a body
