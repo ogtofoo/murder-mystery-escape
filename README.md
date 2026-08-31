@@ -57,6 +57,22 @@ Medic/Engineer appear from 5 players, Trickster from 6.
 Ghosts aren't useless: a murdered crewmate can still finish their stations to
 help the team open doors.
 
+### Murder has rules
+
+Killing is meant to be a private act, so the server enforces two limits on
+every imposter — human and bot alike:
+
+- **No kills in the starting room.** Until the first door opens everyone is
+  locked in together, so the imposters have to help pick that first lock.
+- **No kills in front of a crowd.** If two or more living non-imposters are
+  nearby *with a clear line of sight*, the kill is refused. Walls block
+  sight, so murdering around a corner while people are in the next room is
+  still fair game.
+
+Crew bots hold up their end too: one that witnesses a murder reports the body
+within a couple of seconds and names the killer with its vote in the meeting
+that follows. Bots also report corpses they stumble across on patrol.
+
 ### The Engineer 🔧
 
 A crewmate who brute-forces keys and locks and figures out hints:
@@ -118,15 +134,20 @@ Points and unlocks persist in your browser.
 
 ## Controls
 
-| Action | Keyboard/Mouse | Touch | Gamepad |
+| Action | Keyboard/Mouse | Touch | Xbox pad |
 | --- | --- | --- | --- |
 | Move | WASD / arrows | left joystick | left stick |
 | Camera | mouse (click to lock) | drag right side | right stick |
-| Use / grab / insert | E | on-screen buttons | A |
-| Kill | Q | KILL button | X |
-| Report / revive | R | REPORT / REVIVE | Y |
-| Meeting | T | 📢 button | Start |
-| Ability 1 / 2 | 1 / 2 | ability buttons | B / LB |
+| Use / grab / insert | **E** or **Space** | USE / GRAB / INSERT | **A** |
+| Kill | **Q** or **F** | KILL | **X** |
+| Report / revive | **R** | REPORT / REVIVE | **Y** |
+| Meeting | **T** | 📢 | **Start** |
+| Ability 1 / 2 | **1** / **2** | ability buttons | **B** / **LB** |
+
+Every on-screen button prints its own prompt, and the prompts follow whichever
+device you last used — press a key and they read `E`/`Q`, pick up a controller
+and the same buttons switch to `A`/`X`. Touch shows no prompts, because there
+the button *is* the control.
 
 For the Engineer, ability 1 is Hotwire (or Bypass at the exit terminal) and
 ability 2 is Scan. Shop abilities remain imposter-only.
