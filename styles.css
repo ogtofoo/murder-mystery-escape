@@ -73,6 +73,14 @@ kbd {
 .slot .ct { font-size: 15px; font-weight: 700; }
 .slot .key { font-size: 10px; opacity: 0.5; }
 .slot.empty { opacity: 0.5; font-size: 12px; padding: 18px 6px; }
+.slot.tool { width: 66px; border-style: dashed; }
+.slot.tool.active { border-style: solid; border-color: var(--gold); background: rgba(240,193,75,0.12); }
+.slot.tool .glyph { font-size: 20px; line-height: 1.1; }
+.digbar {
+  display: block; height: 6px; margin-top: 7px; border-radius: 4px;
+  background: rgba(255,255,255,0.15); overflow: hidden;
+}
+.digbar i { display: block; height: 100%; background: var(--gold); transition: width 0.05s linear; }
 
 #toasts {
   position: absolute; top: 90px; left: 18px; display: flex; flex-direction: column; gap: 6px;

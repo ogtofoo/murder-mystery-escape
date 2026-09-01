@@ -23,6 +23,8 @@ python3 -m http.server 8777
 | `Shift` / `Space` | Sprint / jump |
 | `E` or left click | Plant, harvest, till a new plot, open the shop at the stall |
 | `1`–`9` / `Q` | Pick a seed from the hotbar |
+| `G` | Take out / put away the shovel |
+| Hold `E` | With the shovel out: dig up the plant you're looking at |
 | `B` | Seed shop (seeds, packs, almanac) |
 | `V` | Toggle **first person ↔ third person** |
 | `Esc` | Close the shop / back to the menu |
@@ -44,6 +46,7 @@ the game switches its on-screen hints over as soon as it sees one.
 | `LB` / `RB` | Previous / next seed — and previous / next shop tab |
 | D-pad or left stick | Move the highlight through the shop list |
 | `R3` | Snap the third-person camera close / far |
+| D-pad ↓ | Take out / put away the shovel (hold `A` to dig) |
 | `Start` | Menu |
 
 The shop, the pack reveal and the title screen are all fully navigable with the pad, and it
@@ -92,6 +95,14 @@ earns far more per plot, and much more per second once established. The two sing
 crops in the upper tiers are priced as the fast-payback alternative: a cheaper seed that pays
 out sooner, if you don't mind replanting. Every seed's line in the shop spells out the
 harvests, the regrow time and the lifetime total.
+
+### The shovel
+
+Press `G` to take out the shovel, then **hold** `E` on any planted plot to dig the crop up and
+free the plot — useful for clearing a low-tier crop you've outgrown, or a multi-harvest plant
+squatting on a plot you want back. It's a hold rather than a tap so a stray press can't
+destroy a plant with harvests left, and the prompt tells you how many you're throwing away.
+Nothing is refunded, and while the shovel is out `E` won't harvest — press `G` again to stow it.
 
 ### Tiers
 

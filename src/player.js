@@ -1,7 +1,7 @@
 // Player controller: WASD + mouse look, jumping, and a first/third person camera.
 
 import * as THREE from 'three';
-import { buildGardener, animateGardener } from './gardener.js';
+import { buildGardener, buildShovel, animateGardener, setShovel } from './gardener.js';
 
 const WALK = 5.2;
 const SPRINT = 9.0;
@@ -16,6 +16,19 @@ export class Player {
     this.dom = domElement;
     this.model = buildGardener();
     scene.add(this.model);
+
+    // A shovel held in view for first person. Parented to the camera, which is
+    // added to the scene so its children are rendered.
+    this.fpShovel = buildShovel();
+    this.fpShovel.position.set(0.34, -0.30, -0.62);
+    this.fpShovel.rotation.set(0.15, -0.4, 0.5);
+    this.fpShovel.scale.setScalar(0.8);
+    this.fpShovel.visible = false;
+    camera.add(this.fpShovel);
+    scene.add(camera);
+
+    this.shovel = false;
+    this.digging = 0;
 
     this.pos = new THREE.Vector3(0, 0, 9);
     this.vy = 0;
@@ -68,6 +81,13 @@ export class Player {
       const r = this.dom.requestPointerLock?.();
       if (r && typeof r.catch === 'function') r.catch(() => {});
     } catch (err) { /* not allowed right now; click the page to capture the mouse */ }
+  }
+
+  /** Equip or stow the shovel. */
+  setShovel(on) {
+    this.shovel = on;
+    setShovel(this.model, on);
+    return on;
   }
 
   toggleView() {
@@ -142,7 +162,14 @@ export class Player {
 
     this.model.position.copy(this.pos);
     this.model.visible = this.view === 'third';
-    animateGardener(this.model, dt, this.speed01, this.grounded, t);
+    this.fpShovel.visible = this.shovel && this.view === 'first';
+    if (this.fpShovel.visible) {
+      // Little heft as you walk, and a chop while digging.
+      const bob = Math.sin(t * 8) * 0.02 * this.speed01;
+      this.fpShovel.position.set(0.34, -0.30 + bob - this.digging * 0.12, -0.62);
+      this.fpShovel.rotation.x = 0.15 + Math.sin(t * 9) * 0.35 * this.digging;
+    }
+    animateGardener(this.model, dt, this.speed01, this.grounded, t, this.digging);
 
     this.updateCamera(dt);
   }

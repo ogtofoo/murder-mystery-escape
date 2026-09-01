@@ -28,6 +28,7 @@ export const sfx = {
   plant() { beep(320, 0.1, 'triangle'); beep(420, 0.1, 'triangle', 0.05, 0.06); },
   buy() { beep(660, 0.09, 'square', 0.05); beep(880, 0.11, 'square', 0.04, 0.07); },
   deny() { beep(160, 0.16, 'sawtooth', 0.05); },
+  dig() { beep(120, 0.18, 'sawtooth', 0.06); beep(90, 0.22, 'triangle', 0.05, 0.08); },
   harvest(tier = 0) {
     const base = 440 + tier * 40;
     beep(base, 0.1, 'sine', 0.07);

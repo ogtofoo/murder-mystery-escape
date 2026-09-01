@@ -18,6 +18,22 @@ function box(w, h, d, color, pos) {
   return m;
 }
 
+/** A spade: wooden handle, steel blade. Used both in-hand and in first person. */
+export function buildShovel() {
+  const g = new THREE.Group();
+  const handle = box(0.05, 0.86, 0.05, 0x9c6b3f, [0, 0, 0]);
+  const grip = box(0.14, 0.06, 0.05, 0x7a4f2b, [0, 0.44, 0]);
+  const neck = box(0.07, 0.12, 0.06, 0x9e9e9e, [0, -0.46, 0]);
+  const blade = new THREE.Mesh(
+    new THREE.BoxGeometry(0.22, 0.26, 0.035),
+    new THREE.MeshStandardMaterial({ color: 0xb8bcc0, flatShading: true, roughness: 0.45, metalness: 0.55 })
+  );
+  blade.position.set(0, -0.63, 0);
+  blade.castShadow = true;
+  g.add(handle, grip, neck, blade);
+  return g;
+}
+
 export function buildGardener() {
   const root = new THREE.Group();
 
@@ -48,7 +64,13 @@ export function buildGardener() {
   const legR = legL.clone(); legR.position.x = 0.14;
   body.add(legL, legR);
 
-  root.userData = { body, head, armL, armR, legL, legR, phase: 0 };
+  const shovel = buildShovel();
+  shovel.position.set(0.02, -0.46, 0.12);
+  shovel.rotation.set(-0.25, 0, -0.32);
+  shovel.visible = false;
+  armR.add(shovel);
+
+  root.userData = { body, head, armL, armR, legL, legR, shovel, phase: 0 };
   return root;
 }
 
@@ -56,8 +78,20 @@ export function buildGardener() {
  * @param {number} speed01 planar movement speed normalised to 0..1
  * @param {boolean} grounded
  */
-export function animateGardener(g, dt, speed01, grounded, t) {
+export function setShovel(g, on) { g.userData.shovel.visible = on; }
+
+export function animateGardener(g, dt, speed01, grounded, t, digging = 0) {
   const u = g.userData;
+  if (digging > 0) {
+    // Both arms forward, a rhythmic dig; overrides the walk pose below.
+    const swing = Math.sin(t * 9) * 0.45;
+    u.armL.rotation.x = -1.15 + swing;
+    u.armR.rotation.x = -1.15 + swing;
+    u.legL.rotation.x = 0.1; u.legR.rotation.x = -0.1;
+    u.body.rotation.x = 0.18 + swing * 0.12;
+    return;
+  }
+  u.body.rotation.x = 0;
   u.phase += dt * (4 + speed01 * 9) * (speed01 > 0.02 ? 1 : 0);
   const swing = Math.sin(u.phase) * 0.75 * speed01;
   const idle = Math.sin(t * 1.6) * 0.04;

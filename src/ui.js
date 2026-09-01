@@ -11,6 +11,7 @@ export class UI {
     this.selected = null;
     this.shopOpen = false;
     this.tab = 'seeds';
+    this.shovelOut = false;
     this.padActive = false;   // draws a focus ring once a controller is in use
     this.focusIndex = 0;
 
@@ -44,7 +45,8 @@ export class UI {
     }
     this.el.hotbar.addEventListener('click', e => {
       const slot = e.target.closest('.slot');
-      if (slot?.dataset.plant) this.select(slot.dataset.plant);
+      if (slot?.dataset.tool === 'shovel') this.hooks.toggleShovel();
+      else if (slot?.dataset.plant) this.select(slot.dataset.plant);
     });
   }
 
@@ -72,11 +74,25 @@ export class UI {
       .slice(0, 9);
   }
 
+  setShovel(on) {
+    this.shovelOut = on;
+    this.renderHotbar();
+  }
+
+  toolSlot() {
+    return `<div class="slot tool ${this.shovelOut ? 'active' : ''}" data-tool="shovel">
+      <div class="glyph">⛏</div>
+      <div class="nm">Shovel</div>
+      <div class="key">G</div>
+    </div>`;
+  }
+
   renderHotbar() {
     const ids = this.hotbarSeeds();
     if (!ids.includes(this.selected)) this.selected = ids[0] || null;
     if (!ids.length) {
-      this.el.hotbar.innerHTML = `<div class="slot empty">No seeds — press <b>B</b> to buy a carrot</div>`;
+      this.el.hotbar.innerHTML =
+        `<div class="slot empty">No seeds — press <b>B</b> to buy a carrot</div>` + this.toolSlot();
       return;
     }
     this.el.hotbar.innerHTML = ids.map((id, i) => {
@@ -87,7 +103,7 @@ export class UI {
         <div class="ct">×${seedCount(id)}</div>
         <div class="key">${i + 1}</div>
       </div>`;
-    }).join('');
+    }).join('') + this.toolSlot();
   }
 
   select(id) {

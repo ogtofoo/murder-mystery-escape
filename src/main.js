@@ -16,6 +16,7 @@ import { BUILD_LABEL } from './build.js';
 const REACH = 6.5;
 const NAV_FIRST = 0.36;   // hold-to-repeat timings for stick/d-pad menu navigation
 const NAV_REPEAT = 0.14;
+const DIG_TIME = 0.75;    // seconds of holding before a plant comes out
 const STALL_RANGE = 5.5;
 
 const canvas = document.getElementById('game');
@@ -41,6 +42,7 @@ const ui = new UI({
     ui.refresh();
     ui.toast('Backup restored — welcome back.', 'gold');
   },
+  toggleShovel: () => toggleShovel(),
   buySeed: id => buySeed(id),
   buyPack: id => buyPack(id),
   onShopToggle: open => {
@@ -150,6 +152,50 @@ function harvest(index) {
   gamepad.rumble(0.25 + TIERS[p.tier].order * 0.08, 90 + TIERS[p.tier].order * 20);
   ui.refresh();
   save();
+}
+
+function digUp(index) {
+  const plot = state.plots[index];
+  if (!plot) return;
+  const p = PLANTS_BY_ID[plot.plantId];
+  state.plots[index] = null;
+  syncPlot(index);
+  burst(world.plots[index], 0x8a6242);
+  const lost = harvestsLeft(plot);
+  ui.toast(`Dug up ${p.name}${lost > 1 ? ` <span style="opacity:.7">· ${lost} harvests lost</span>` : ''}`);
+  sfx.dig();
+  gamepad.rumble(0.35, 140);
+  ui.refresh();
+  save();
+}
+
+/**
+ * Hold-to-dig, so a stray press can't wipe out a mature crop. Timed off the
+ * wall clock rather than the loop's clamped dt, so a slow frame rate doesn't
+ * make digging drag.
+ */
+let digIndex = -1;
+let digStart = 0;
+let digProgress = 0;
+
+function updateDigging(holding) {
+  const valid = player.shovel && target >= 0 && target < state.owned && state.plots[target];
+  if (!valid || !holding || ui.modalOpen) {
+    if (digProgress > 0.15 && valid && !holding) sfx.deny();   // let go too early
+    digIndex = -1;
+    digProgress = 0;
+    player.digging = 0;
+    return;
+  }
+  if (target !== digIndex) { digIndex = target; digStart = performance.now(); }
+  digProgress = Math.min(1, (performance.now() - digStart) / (DIG_TIME * 1000));
+  player.digging = digProgress;
+  if (digProgress >= 1) {
+    digUp(digIndex);
+    digIndex = -1;
+    digProgress = 0;
+    player.digging = 0;
+  }
 }
 
 // ---------------------------------------------------------------- plot visuals
@@ -267,6 +313,15 @@ function updatePrompt() {
       return;
     }
     const plot = state.plots[i];
+    if (player.shovel && plot) {
+      const p = PLANTS_BY_ID[plot.plantId];
+      const left = harvestsLeft(plot);
+      const pct = Math.round(digProgress * 100);
+      ui.setPrompt(`<b>[Hold E]</b> Dig up ${p.name}
+        <span class="sub">${left > 1 ? `throws away ${left} remaining harvests` : 'clears the plot'}</span>
+        <span class="digbar"><i style="width:${pct}%"></i></span>`);
+      return;
+    }
     if (!plot) {
       const sel = ui.selected ? PLANTS_BY_ID[ui.selected] : null;
       ui.setPrompt(sel
@@ -304,6 +359,7 @@ function interact() {
     const i = target;
     if (i >= state.owned) { buyPlot(i); return; }
     const plot = state.plots[i];
+    if (player.shovel && plot) return;   // handled by hold-to-dig
     if (!plot) plant(i);
     else if (isRipe(plot)) harvest(i);
     else ui.toast(`${PLANTS_BY_ID[plot.plantId].name} is still growing.`);
@@ -331,6 +387,7 @@ window.addEventListener('keydown', e => {
       break;
     case 'KeyQ': ui.cycleSelection(-1); break;
     case 'KeyP': togglePadTest(); break;
+    case 'KeyG': toggleShovel(); break;
     default:
       if (/^Digit[1-9]$/.test(e.code)) ui.selectIndex(Number(e.code.slice(5)) - 1);
   }
@@ -346,9 +403,13 @@ canvas.addEventListener('click', () => {
   if (!ui.modalOpen) player.requestLock();
 });
 
+let mouseHeld = false;
 canvas.addEventListener('mousedown', e => {
-  if (player.locked && e.button === 0) interact();
+  if (e.button !== 0) return;
+  mouseHeld = true;
+  if (player.locked) interact();
 });
+window.addEventListener('mouseup', e => { if (e.button === 0) mouseHeld = false; });
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
@@ -424,8 +485,16 @@ function updateGamepad(dt) {
   if (pressed.has(BTN.B)) { const v = player.toggleView(); ui.toast(v === 'first' ? 'First person' : 'Third person'); }
   if (pressed.has(BTN.LB)) ui.cycleSelection(-1);
   if (pressed.has(BTN.RB)) ui.cycleSelection(1);
+  if (pressed.has(BTN.DOWN)) toggleShovel();
   if (pressed.has(BTN.R3)) { player.camDistance = player.camDistance > 4 ? 3.2 : 6.0; }
   if (pressed.has(BTN.START) || pressed.has(BTN.BACK)) { document.exitPointerLock?.(); ui.showMenu(true); }
+}
+
+function toggleShovel(force) {
+  const on = player.setShovel(force ?? !player.shovel);
+  ui.setShovel(on);
+  ui.toast(on ? 'Shovel out — hold E on a plant to dig it up' : 'Shovel away');
+  return on;
 }
 
 const padTestEl = document.getElementById('padtest');
@@ -452,6 +521,7 @@ function tick() {
   const active = !ui.modalOpen;
 
   updateGamepad(dt);
+  updateDigging(active && (player.keys.has('KeyE') || mouseHeld || gamepad.held.has(BTN.A)));
   if (!padTestEl.classList.contains('hidden')) {
     padTestClock += dt;
     if (padTestClock > 0.08) { padTestClock = 0; renderPadTest(padTestEl, gamepad); }
@@ -490,7 +560,7 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { build: BUILD_LABEL, state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
+window.game = { build: BUILD_LABEL, toggleShovel, digUp, state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
 
 syncAllPlots();
 ui.refresh();
