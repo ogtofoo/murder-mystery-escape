@@ -2,7 +2,8 @@
 
 import * as THREE from 'three';
 import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollSeed, plotCost, PLOT_COUNT } from './data.js';
-import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount, growth, isRipe } from './state.js';
+import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount,
+         growth, isRipe, isRegrowing, harvestsLeft, cycleSeconds } from './state.js';
 import { buildWorld } from './world.js';
 import { buildPlant, animatePlant } from './plants.js';
 import { Player } from './player.js';
@@ -117,9 +118,10 @@ function plant(index) {
   if (!id || seedCount(id) <= 0) { ui.toast('No seed selected. Buy one in the shop (B).', 'bad'); sfx.deny(); return; }
   if (state.plots[index]) return;
   takeSeed(id);
-  state.plots[index] = { plantId: id, plantedAt: Date.now() };
+  state.plots[index] = { plantId: id, plantedAt: Date.now(), taken: 0 };
   syncPlot(index);
-  ui.toast(`Planted ${PLANTS_BY_ID[id].name}`);
+  const planted = PLANTS_BY_ID[id];
+  ui.toast(`Planted ${planted.name}${planted.harvests > 1 ? ` — good for ${planted.harvests} harvests` : ''}`);
   sfx.plant();
   ui.refresh();
   save();
@@ -131,10 +133,19 @@ function harvest(index) {
   const p = PLANTS_BY_ID[plot.plantId];
   earn(p.sell);
   state.stats.harvested++;
-  state.plots[index] = null;
+
+  // Multi-harvest crops stay in the ground and start a (faster) regrow cycle.
+  plot.taken = (plot.taken || 0) + 1;
+  const left = p.harvests - plot.taken;
+  if (left <= 0) state.plots[index] = null;
+  else plot.plantedAt = Date.now();
+
   burst(world.plots[index], TIERS[p.tier].color);
   syncPlot(index);
-  ui.toast(`Harvested ${p.name} &nbsp;<b class="coin">+₪${fmt(p.sell)}</b>`, 'gold');
+  const note = p.harvests === 1 ? ''
+    : left > 0 ? ` <span style="opacity:.7">· regrows, ${left} left</span>`
+    : ` <span style="opacity:.7">· plant is spent</span>`;
+  ui.toast(`Harvested ${p.name} &nbsp;<b class="coin">+₪${fmt(p.sell)}</b>${note}`, 'gold');
   sfx.harvest(TIERS[p.tier].order);
   gamepad.rumble(0.25 + TIERS[p.tier].order * 0.08, 90 + TIERS[p.tier].order * 20);
   ui.refresh();
@@ -264,13 +275,19 @@ function updatePrompt() {
       return;
     }
     const p = PLANTS_BY_ID[plot.plantId];
+    const picks = harvestsLeft(plot);
     if (isRipe(plot)) {
+      const after = picks - 1;
+      const more = p.harvests === 1 ? '' :
+        after > 0 ? ` · regrows ${after} more time${after === 1 ? '' : 's'}` : ' · last picking';
       ui.setPrompt(`<b>[E]</b> Harvest ${p.name} — <span class="coin">₪${fmt(p.sell)}</span>
-        <span class="sub" style="color:${TIERS[p.tier].css}">${TIERS[p.tier].name}</span>`);
+        <span class="sub" style="color:${TIERS[p.tier].css}">${TIERS[p.tier].name}${more}</span>`);
     } else {
-      const left = Math.ceil(p.grow * (1 - growth(plot)));
-      ui.setPrompt(`${p.name} — ${Math.floor(growth(plot) * 100)}% grown
-        <span class="sub">ready in ${left}s</span>`);
+      const wait = Math.ceil(cycleSeconds(plot) * (1 - growth(plot)));
+      const verb = isRegrowing(plot) ? 'regrowing' : 'grown';
+      const tail = p.harvests === 1 ? '' : ` · ${picks} harvest${picks === 1 ? '' : 's'} left`;
+      ui.setPrompt(`${p.name} — ${Math.floor(growth(plot) * 100)}% ${verb}
+        <span class="sub">ready in ${wait}s${tail}</span>`);
     }
     return;
   }
@@ -459,9 +476,11 @@ function tick() {
     const g = growth(data);
     const done = g >= 1;
     if (done) ripe++;
-    const s = 0.28 + 0.72 * easeOut(g);
-    view.crop.scale.setScalar(s);
-    animatePlant(view.crop, t, dt, done);
+    // First cycle grows from a sprout; regrowth keeps the established plant and
+    // just fills the fruit back in.
+    const floor = data.taken > 0 ? 0.82 : 0.28;
+    view.crop.scale.setScalar(floor + (1 - floor) * easeOut(g));
+    animatePlant(view.crop, t, dt, done, g);
   }
   if (ripe !== ripeCount) { ripeCount = ripe; }
 

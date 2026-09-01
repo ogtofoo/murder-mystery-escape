@@ -21,6 +21,13 @@ function mat(color, tier, extra = {}) {
   });
 }
 
+/** Tag a mesh as the edible part, so it can regrow after a picking. */
+function fruit(m) {
+  m.userData.fruit = true;
+  m.userData.baseScale = m.scale.clone();
+  return m;
+}
+
 function mesh(g, m, pos, scale) {
   const o = new THREE.Mesh(g, m);
   if (pos) o.position.set(pos[0], pos[1], pos[2]);
@@ -75,7 +82,7 @@ export function buildPlant(plant) {
       g.add(mesh(SPHERE(), foliage, [0, 0.6, 0], [1.05, 0.9, 1.05]));
       for (let i = 0; i < 4; i++) {
         const a = (i / 4) * Math.PI * 2 + 0.4;
-        g.add(mesh(SPHERE(), body, [Math.cos(a) * 0.46, 0.58 + (i % 2) * 0.16, Math.sin(a) * 0.46], 0.32));
+        g.add(fruit(mesh(SPHERE(), body, [Math.cos(a) * 0.46, 0.58 + (i % 2) * 0.16, Math.sin(a) * 0.46], 0.32)));
       }
       break;
     }
@@ -83,8 +90,8 @@ export function buildPlant(plant) {
       const v = mesh(RING(), foliage, [0, 0.06, 0], [1.3, 1.3, 1.3]);
       v.rotation.x = Math.PI / 2;
       g.add(v);
-      g.add(mesh(SPHERE(), body, [0, 0.42, 0], [1.15, 0.9, 1.15]));
-      g.add(mesh(SPHERE(), foliage, [0.5, 0.2, -0.35], 0.34));
+      g.add(fruit(mesh(SPHERE(), body, [0, 0.42, 0], [1.15, 0.9, 1.15])));
+      g.add(fruit(mesh(SPHERE(), foliage, [0.5, 0.2, -0.35], 0.34)));
       break;
     }
     case 'flower': {
@@ -93,9 +100,9 @@ export function buildPlant(plant) {
         const a = (i / 6) * Math.PI * 2;
         const p = mesh(SPHERE(), body, [Math.cos(a) * 0.34, 0.86, Math.sin(a) * 0.34], [0.42, 0.16, 0.24]);
         p.rotation.y = -a;
-        g.add(p);
+        g.add(fruit(p));
       }
-      g.add(mesh(SPHERE(), mat(0xfff59d, plant.tier), [0, 0.9, 0], 0.26));
+      g.add(fruit(mesh(SPHERE(), mat(0xfff59d, plant.tier), [0, 0.9, 0], 0.26)));
       break;
     }
     case 'tree': {
@@ -103,13 +110,13 @@ export function buildPlant(plant) {
       g.add(mesh(SPHERE(), foliage, [0, 1.15, 0], [1.3, 1.1, 1.3]));
       for (let i = 0; i < 5; i++) {
         const a = (i / 5) * Math.PI * 2;
-        g.add(mesh(SPHERE(), body, [Math.cos(a) * 0.62, 1.0 + (i % 2) * 0.26, Math.sin(a) * 0.62], 0.34));
+        g.add(fruit(mesh(SPHERE(), body, [Math.cos(a) * 0.62, 1.0 + (i % 2) * 0.26, Math.sin(a) * 0.62], 0.34)));
       }
       break;
     }
     case 'orb':
     default: {
-      const core = mesh(OCTA(), body, [0, 0.72, 0], 0.85);
+      const core = fruit(mesh(OCTA(), body, [0, 0.72, 0], 0.85));
       core.userData.spin = 1;
       g.add(core);
       const r1 = mesh(RING(), foliage, [0, 0.72, 0], 1.5);
@@ -126,18 +133,27 @@ export function buildPlant(plant) {
 
   g.userData.rainbowParts = rainbow;
   g.userData.spinners = g.children.filter(c => c.userData.spin);
+  g.userData.fruits = g.children.filter(c => c.userData.fruit);
   return g;
 }
 
 const _c = new THREE.Color();
 
-/** Per-frame flourish: rainbow tiers cycle hue, orbs spin, ripe crops bob. */
-export function animatePlant(group, t, dt, ripe) {
+/**
+ * Per-frame flourish: rainbow tiers cycle hue, orbs spin, ripe crops bob, and
+ * the edible parts swell as the crop ripens (`fill`, 0..1).
+ */
+export function animatePlant(group, t, dt, ripe, fill = 1) {
   for (const m of group.userData.rainbowParts) {
     _c.setHSL((t * 0.15 + (m.userData.hueOffset ?? (m.userData.hueOffset = Math.random()))) % 1, 0.75, 0.6);
     m.emissive.copy(_c).multiplyScalar(0.5);
   }
   for (const s of group.userData.spinners) s.rotation.y += s.userData.spin * dt;
+  for (const f of group.userData.fruits) {
+    const k = 0.1 + 0.9 * fill * fill;
+    f.scale.copy(f.userData.baseScale).multiplyScalar(k);
+    f.visible = fill > 0.05;
+  }
   if (ripe) {
     group.position.y = Math.sin(t * 2.2 + group.userData.phase) * 0.05;
     group.rotation.y = Math.sin(t * 0.8 + group.userData.phase) * 0.08;

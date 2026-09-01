@@ -187,7 +187,7 @@ export class UI {
           <div class="stripe" style="background:${TIERS[tier].css}"></div>
           <div>
             <div class="name">${p.name}</div>
-            <div class="meta">grows in ${p.grow}s · sells for ₪${fmt(p.sell)} · profit ₪${fmt(p.sell - p.cost)}</div>
+            <div class="meta">${harvestLine(p)}</div>
           </div>
           <div class="own">owned<br><b>${seedCount(p.id)}</b></div>
           <button class="buy" data-seed="${p.id}" ${can ? '' : 'disabled'}>₪ ${fmt(p.cost)}</button>
@@ -241,7 +241,7 @@ export class UI {
           <div class="stripe" style="background:${TIERS[tier].css}"></div>
           <div>
             <div class="name">${known ? p.name : '???'}</div>
-            <div class="meta">${known ? `${p.grow}s · seed ₪${fmt(p.cost)} · harvest ₪${fmt(p.sell)}` : 'undiscovered — try a seed pack'}</div>
+            <div class="meta">${known ? `${harvestLine(p)} · seed ₪${fmt(p.cost)}` : 'undiscovered — try a seed pack'}</div>
           </div>
           <div class="own">${known ? `×${seedCount(p.id)}` : ''}</div><div></div>
         </div>`;
@@ -257,7 +257,7 @@ export class UI {
       return `<div class="card" style="border-color:${t.css}; animation-delay:${i * 0.14}s; box-shadow:0 0 26px ${t.css}33">
         <div class="t" style="color:${t.css}">${t.name}</div>
         <div class="n">${p.name}</div>
-        <div class="v">sells for ₪${fmt(p.sell)}</div>
+        <div class="v">₪${fmt(p.sell)} per pick${p.harvests > 1 ? ` · ×${p.harvests}` : ''}</div>
       </div>`;
     }).join('');
     this.el.packmodal.classList.remove('hidden');
@@ -276,6 +276,15 @@ export class UI {
       '<b>A</b> buy · <b>LB/RB</b> tabs · <b>B</b> close');
     this.applyFocus(true);
   }
+}
+
+/** One line describing what a seed actually gives you. */
+function harvestLine(p) {
+  if (p.harvests === 1) {
+    return `grows in ${p.grow}s · single harvest ₪${fmt(p.sell)} · profit ₪${fmt(p.sell - p.cost)}`;
+  }
+  return `grows in ${p.grow}s · <b>${p.harvests} harvests</b> of ₪${fmt(p.sell)}, regrows every ${p.regrow}s
+          · ₪${fmt(p.lifetime)} total · profit ₪${fmt(p.lifetime - p.cost)}`;
 }
 
 function total(weights) {

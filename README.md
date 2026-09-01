@@ -79,6 +79,20 @@ version you're actually running after a `git pull`.
 5. Reinvest in better seeds — or gamble on **seed packs**, which are deliberately brutal in
    price and are the only way to discover rare seeds and above.
 
+### Single vs multi harvest
+
+Crops you pull out of the ground whole — carrots, radishes, lettuce, star corn, eternity root —
+are one and done. Everything that fruits from a standing plant (bushes, vines, flowers, trees
+and the floating orbs) **keeps producing**: harvest it and the plant stays put, its fruit
+regrows on a shorter timer, and you pick it again. Bushes give 4 harvests, vines 3, flowers 5,
+trees 6, orbs 8 — then the plant is spent and the plot frees up.
+
+A regrowing seed costs more up front (the price scales with how many pickings it gives) but
+earns far more per plot, and much more per second once established. The two single-harvest
+crops in the upper tiers are priced as the fast-payback alternative: a cheaper seed that pays
+out sooner, if you don't mind replanting. Every seed's line in the shop spells out the
+harvests, the regrow time and the lifetime total.
+
 ### Tiers
 
 Common → Uncommon → Rare → Legendary → Mythic → Prismatic → Transcendent → **SUPER**

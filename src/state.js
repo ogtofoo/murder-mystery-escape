@@ -12,7 +12,7 @@ function freshState() {
     seeds: { carrot: 0 },
     discovered: { carrot: true, radish: true, lettuce: true },
     owned: 1,                       // number of unlocked plots (first N of plotOrder)
-    plots: new Array(PLOT_COUNT).fill(null), // { plantId, plantedAt }
+    plots: new Array(PLOT_COUNT).fill(null), // { plantId, plantedAt, taken }
     stats: { harvested: 0, earned: 0, packsOpened: 0, best: null },
   };
 }
@@ -48,8 +48,11 @@ function sanitize(raw) {
   s.plots = new Array(PLOT_COUNT).fill(null).map((_, i) => {
     const p = plots[i];
     if (!p || !PLANTS_BY_ID[p.plantId] || !Number.isFinite(p.plantedAt)) return null;
+    const plant = PLANTS_BY_ID[p.plantId];
+    // Saves from before multi-harvest have no `taken`; they start fresh.
+    const taken = Number.isFinite(p.taken) ? Math.min(Math.max(0, Math.floor(p.taken)), plant.harvests - 1) : 0;
     // A clock set backwards shouldn't leave a crop growing forever.
-    return { plantId: p.plantId, plantedAt: Math.min(p.plantedAt, Date.now()) };
+    return { plantId: p.plantId, plantedAt: Math.min(p.plantedAt, Date.now()), taken };
   });
   return s;
 }
@@ -118,12 +121,26 @@ export function earn(amount) {
 
 export function nextPlotCost() { return plotCost(state.owned); }
 
-/** Growth progress of a plot, 0..1. */
+/** Seconds this plot's current cycle takes — the first is the slow one. */
+export function cycleSeconds(plot) {
+  const plant = PLANTS_BY_ID[plot?.plantId];
+  if (!plant) return 1;
+  return plot.taken > 0 ? plant.regrow : plant.grow;
+}
+
+/** Growth progress of a plot's current cycle, 0..1. */
 export function growth(plot) {
-  if (!plot) return 0;
-  const plant = PLANTS_BY_ID[plot.plantId];
-  if (!plant) return 0;
-  return Math.min(1, (Date.now() - plot.plantedAt) / (plant.grow * 1000));
+  if (!plot || !PLANTS_BY_ID[plot.plantId]) return 0;
+  return Math.min(1, (Date.now() - plot.plantedAt) / (cycleSeconds(plot) * 1000));
 }
 
 export function isRipe(plot) { return growth(plot) >= 1; }
+
+/** True once this plant has been picked at least once. */
+export function isRegrowing(plot) { return !!plot && plot.taken > 0; }
+
+/** Pickings remaining, including the one that's ready now. */
+export function harvestsLeft(plot) {
+  const plant = PLANTS_BY_ID[plot?.plantId];
+  return plant ? plant.harvests - (plot.taken || 0) : 0;
+}
