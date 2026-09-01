@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollSeed, plotCost, PLOT_COUNT } from './data.js';
-import { state, save, resetSave, addSeed, takeSeed, spend, earn, seedCount, growth, isRipe } from './state.js';
+import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount, growth, isRipe } from './state.js';
 import { buildWorld } from './world.js';
 import { buildPlant, animatePlant } from './plants.js';
 import { Player } from './player.js';
@@ -31,6 +31,13 @@ const player = new Player(scene, camera, canvas);
 const ui = new UI({
   play: () => startPlaying(),
   reset: () => { resetSave(); syncAllPlots(true); ui.refresh(); ui.toast('Fresh soil. Good luck!', 'gold'); save(); },
+  exportSave: () => downloadSave(),
+  importSave: text => {
+    importSave(text);
+    syncAllPlots(true);
+    ui.refresh();
+    ui.toast('Backup restored — welcome back.', 'gold');
+  },
   buySeed: id => buySeed(id),
   buyPack: id => buyPack(id),
   onShopToggle: open => {
@@ -38,6 +45,20 @@ const ui = new UI({
     else player.requestLock();
   },
 });
+
+/** Hand the player a .json copy of their save. */
+function downloadSave() {
+  const blob = new Blob([exportSave()], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `sheckle-garden-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  ui.toast('Backup saved to your downloads.', 'gold');
+}
 
 // ---------------------------------------------------------------- economy
 

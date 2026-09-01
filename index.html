@@ -69,7 +69,13 @@
       <div><b>Start</b> menu &nbsp; <b>R3</b> zoom</div>
     </div>
     <button id="playbtn">Click to play</button>
-    <button id="resetbtn" class="ghost">Erase save &amp; start over</button>
+    <div class="savebar">
+      <button id="exportbtn" class="ghost">⬇ Back up save</button>
+      <button id="importbtn" class="ghost">⬆ Restore backup</button>
+      <button id="resetbtn" class="ghost danger">Erase save &amp; start over</button>
+    </div>
+    <p class="savenote">Your garden saves in this browser automatically — updating the game does not erase it.</p>
+    <input id="importfile" type="file" accept="application/json,.json" hidden />
   </div>
 </div>
 

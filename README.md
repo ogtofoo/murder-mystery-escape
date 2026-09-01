@@ -69,8 +69,24 @@ Common seeds are always on the shelf. Everything from Rare up has to be pulled o
 pack first; once a species is discovered it stays in the shop (and the almanac) so you can buy
 it directly. Prismatic and above hue-cycle and glow in the world.
 
-Progress (money, seeds, plots, growing crops and the almanac) saves to `localStorage`, and
-crops keep growing while the tab is closed. "Erase save & start over" is on the title menu.
+## Saves
+
+Progress (money, seeds, plots, growing crops and the almanac) saves automatically to the
+browser's `localStorage`, and crops keep growing while the tab is closed.
+
+**Updating the game does not erase your garden.** The save belongs to the URL you play on, not
+to the files, so `git pull`-ing a new version — or deleting and re-cloning the folder — leaves
+it untouched, as long as you keep serving on the same address (`http://localhost:8777`).
+Saves are also version-tolerant: a save from an older build loads into a newer one, filling in
+whatever is new and quietly dropping anything that no longer exists.
+
+You *would* lose it by switching port or hostname (`localhost:8000`, or `127.0.0.1` instead of
+`localhost` — different origin, different save), clearing browser data, playing in a private
+window, or using a different browser or computer.
+
+So the title menu has **⬇ Back up save**, which downloads a `sheckle-garden-YYYY-MM-DD.json`
+file, and **⬆ Restore backup**, which loads one back in — that file moves your farm between
+ports, browsers and machines. "Erase save & start over" is there too.
 
 ## Layout
 

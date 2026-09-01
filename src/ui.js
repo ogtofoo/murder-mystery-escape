@@ -25,6 +25,14 @@ export class UI {
     $('#resetbtn').addEventListener('click', () => {
       if (confirm('Erase your garden and start again with 1 sheckle?')) this.hooks.reset();
     });
+    $('#exportbtn').addEventListener('click', () => this.hooks.exportSave());
+    $('#importbtn').addEventListener('click', () => $('#importfile').click());
+    $('#importfile').addEventListener('change', e => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      file.text().then(text => this.hooks.importSave(text)).catch(err => this.toast(err.message, 'bad'));
+      e.target.value = '';
+    });
     $('#packok').addEventListener('click', () => this.el.packmodal.classList.add('hidden'));
     $('[data-close-shop]').addEventListener('click', () => this.toggleShop(false));
     for (const tab of document.querySelectorAll('.tab')) {

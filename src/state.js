@@ -3,9 +3,11 @@
 import { PLOT_COUNT, PLANTS_BY_ID, plotCost } from './data.js';
 
 const SAVE_KEY = 'sheckle-garden-save-v1';
+export const SAVE_VERSION = 2;
 
 function freshState() {
   return {
+    version: SAVE_VERSION,
     money: 1,
     seeds: { carrot: 0 },
     discovered: { carrot: true, radish: true, lettuce: true },
@@ -17,21 +19,45 @@ function freshState() {
 
 export const state = load();
 
+/**
+ * Fold a save of any age into the current shape. Unknown fields are kept,
+ * missing ones take their default, and anything nonsensical is dropped — so
+ * old saves keep working when the game gains new features.
+ */
+function sanitize(raw) {
+  const base = freshState();
+  if (!raw || typeof raw !== 'object') return base;
+
+  const s = { ...base, ...raw, version: SAVE_VERSION };
+  s.money = Number.isFinite(raw.money) ? Math.max(0, raw.money) : base.money;
+  s.owned = Number.isFinite(raw.owned) ? Math.min(PLOT_COUNT, Math.max(1, Math.floor(raw.owned))) : base.owned;
+  s.stats = { ...base.stats, ...(raw.stats || {}) };
+
+  s.seeds = {};
+  for (const [id, n] of Object.entries(raw.seeds || {})) {
+    if (PLANTS_BY_ID[id] && Number.isFinite(n) && n > 0) s.seeds[id] = Math.floor(n);
+  }
+
+  s.discovered = { ...base.discovered };
+  for (const id of Object.keys(raw.discovered || {})) {
+    if (PLANTS_BY_ID[id]) s.discovered[id] = true;
+  }
+  for (const id of Object.keys(s.seeds)) s.discovered[id] = true;
+
+  const plots = Array.isArray(raw.plots) ? raw.plots : [];
+  s.plots = new Array(PLOT_COUNT).fill(null).map((_, i) => {
+    const p = plots[i];
+    if (!p || !PLANTS_BY_ID[p.plantId] || !Number.isFinite(p.plantedAt)) return null;
+    // A clock set backwards shouldn't leave a crop growing forever.
+    return { plantId: p.plantId, plantedAt: Math.min(p.plantedAt, Date.now()) };
+  });
+  return s;
+}
+
 function load() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return freshState();
-    const s = JSON.parse(raw);
-    const base = freshState();
-    const merged = { ...base, ...s, stats: { ...base.stats, ...(s.stats || {}) } };
-    merged.seeds = { ...(s.seeds || {}) };
-    merged.discovered = { ...base.discovered, ...(s.discovered || {}) };
-    if (!Array.isArray(merged.plots) || merged.plots.length !== PLOT_COUNT) {
-      merged.plots = new Array(PLOT_COUNT).fill(null);
-    }
-    // Drop crops referencing plants that no longer exist.
-    merged.plots = merged.plots.map(p => (p && PLANTS_BY_ID[p.plantId] ? p : null));
-    return merged;
+    return raw ? sanitize(JSON.parse(raw)) : freshState();
   } catch (err) {
     console.warn('Save could not be read, starting fresh.', err);
     return freshState();
@@ -45,6 +71,24 @@ export function save() {
 export function resetSave() {
   try { localStorage.removeItem(SAVE_KEY); } catch (err) { /* ignore */ }
   Object.assign(state, freshState());
+}
+
+/** The whole save as pretty JSON, for the "back up" button. */
+export function exportSave() {
+  return JSON.stringify({ ...state, version: SAVE_VERSION, savedAt: new Date().toISOString() }, null, 2);
+}
+
+/** Replace the current game with a backup file. Throws if it isn't one. */
+export function importSave(text) {
+  const data = JSON.parse(text);
+  if (!data || typeof data !== 'object' || !Number.isFinite(data.money) || !Array.isArray(data.plots)) {
+    throw new Error('That file is not a Sheckle Garden backup.');
+  }
+  const clean = sanitize(data);
+  for (const key of Object.keys(state)) delete state[key];
+  Object.assign(state, clean);
+  save();
+  return clean;
 }
 
 export function seedCount(id) { return state.seeds[id] || 0; }
