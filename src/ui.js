@@ -1,6 +1,6 @@
 // All DOM overlay logic: wallet, hotbar, shop, pack reveals, toasts, menu.
 
-import { PLANTS, PLANTS_BY_ID, PACKS, TIERS, TIER_ORDER, PLOT_COUNT, fmt } from './data.js';
+import { PLANTS, PLANTS_BY_ID, PACKS, TIERS, TIER_ORDER, PLOT_COUNT, fmt, refundValue, SEED_REFUND } from './data.js';
 import { state, seedCount } from './state.js';
 
 const $ = sel => document.querySelector(sel);
@@ -199,18 +199,26 @@ export class UI {
       html += `<div class="tierhead" style="color:${TIERS[tier].css}">${TIERS[tier].name}</div>`;
       for (const p of list) {
         const can = state.money >= p.cost;
+        const have = seedCount(p.id);
         html += `<div class="row">
           <div class="stripe" style="background:${TIERS[tier].css}"></div>
           <div>
             <div class="name">${p.name}</div>
             <div class="meta">${harvestLine(p)}</div>
           </div>
-          <div class="own">owned<br><b>${seedCount(p.id)}</b></div>
+          <div class="own">owned<br><b>${have}</b></div>
+          <div class="sellcol">
+            <button class="buy sell" data-sell="${p.id}" ${have ? '' : 'disabled'}
+              title="Sell one back at ${Math.round(SEED_REFUND * 100)}%">sell ₪${fmt(refundValue(p))}</button>
+            ${have > 1 ? `<button class="buy sell all" data-sell="${p.id}" data-all="1"
+              title="Sell all ${have}">all ×${have}</button>` : ''}
+          </div>
           <button class="buy" data-seed="${p.id}" ${can ? '' : 'disabled'}>₪ ${fmt(p.cost)}</button>
         </div>`;
       }
     }
-    html += `<div class="tierhead">Locked</div>
+    html += `<div class="tierhead">The shop buys seeds back at ${Math.round(SEED_REFUND * 100)}% of what they cost</div>
+      <div class="tierhead">Locked</div>
       <div class="row locked"><div class="stripe" style="background:#666"></div>
       <div><div class="name">Rare seeds and beyond</div>
       <div class="meta">Only seed packs carry them. Once a seed is discovered it appears here to re-buy.</div></div>
@@ -218,6 +226,9 @@ export class UI {
     this.el.body.innerHTML = html;
     for (const b of this.el.body.querySelectorAll('[data-seed]')) {
       b.addEventListener('click', () => this.hooks.buySeed(b.dataset.seed));
+    }
+    for (const b of this.el.body.querySelectorAll('[data-sell]')) {
+      b.addEventListener('click', () => this.hooks.sellSeed(b.dataset.sell, !!b.dataset.all));
     }
   }
 

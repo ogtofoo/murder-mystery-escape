@@ -91,6 +91,14 @@ export function plotCost(owned) {
   return Math.floor(8 * Math.pow(2.45, owned - 1));
 }
 
+/** The shop buys seeds back at this fraction of their price. */
+export const SEED_REFUND = 0.5;
+
+/** What one seed of this plant sells back for (never less than 1 sheckle). */
+export function refundValue(plant) {
+  return Math.max(1, Math.floor(plant.cost * SEED_REFUND));
+}
+
 const UNITS = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
 
 /** 1234567 -> "1.23M" */

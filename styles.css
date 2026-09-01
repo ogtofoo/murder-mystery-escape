@@ -126,6 +126,9 @@ kbd {
 }
 .row {
   display: grid; grid-template-columns: 8px 1fr auto auto; gap: 14px; align-items: center;
+}
+#shopbody .row:has(.sellcol) {
+  grid-template-columns: 8px 1fr auto auto auto;
   background: rgba(255,255,255,0.045); border: 1px solid rgba(255,255,255,0.07);
   border-radius: 12px; padding: 10px 14px;
 }
@@ -139,6 +142,13 @@ kbd {
 }
 .buy:disabled { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.45); cursor: not-allowed; }
 .buy.big { padding: 12px 16px; font-size: 15px; }
+.sellcol { display: flex; flex-direction: column; gap: 4px; }
+.buy.sell {
+  min-width: 96px; padding: 6px 10px; font-size: 12px; font-weight: 600;
+  background: rgba(255,255,255,0.1); color: var(--ink); border: 1px solid var(--line);
+}
+.buy.sell:hover:not(:disabled) { background: rgba(255,255,255,0.18); }
+.buy.sell.all { background: transparent; opacity: 0.75; }
 .buy.focused {
   outline: 3px solid #fff; outline-offset: 3px;
   box-shadow: 0 0 0 6px rgba(255,255,255,0.14);

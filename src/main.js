@@ -1,7 +1,7 @@
 // Sheckle Garden — entry point: loop, interaction, economy glue.
 
 import * as THREE from 'three';
-import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollSeed, plotCost, PLOT_COUNT } from './data.js';
+import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollSeed, plotCost, PLOT_COUNT, refundValue, SEED_REFUND } from './data.js';
 import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount,
          growth, isRipe, isRegrowing, harvestsLeft, cycleSeconds } from './state.js';
 import { buildWorld } from './world.js';
@@ -44,6 +44,7 @@ const ui = new UI({
   },
   toggleShovel: () => toggleShovel(),
   buySeed: id => buySeed(id),
+  sellSeed: (id, all) => sellSeed(id, all),
   buyPack: id => buyPack(id),
   onShopToggle: open => {
     if (open) document.exitPointerLock?.();
@@ -74,6 +75,22 @@ function buySeed(id) {
   addSeed(id, 1);
   ui.select(id);
   ui.toast(`Bought a ${p.name} seed for ₪${fmt(p.cost)}`);
+  sfx.buy();
+  ui.refresh();
+  save();
+}
+
+/** Sell seeds back to the shop at SEED_REFUND of what they cost. */
+function sellSeed(id, all = false) {
+  const p = PLANTS_BY_ID[id];
+  if (!p) return;
+  const have = seedCount(id);
+  if (have <= 0) { ui.toast('You have none of those.', 'bad'); sfx.deny(); return; }
+  const qty = all ? have : 1;
+  for (let i = 0; i < qty; i++) takeSeed(id);
+  const paid = refundValue(p) * qty;
+  earn(paid);
+  ui.toast(`Sold ${qty} ${p.name} seed${qty === 1 ? '' : 's'} back for <b class="coin">₪${fmt(paid)}</b>`);
   sfx.buy();
   ui.refresh();
   save();
@@ -560,7 +577,7 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { build: BUILD_LABEL, toggleShovel, digUp, state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
+window.game = { build: BUILD_LABEL, toggleShovel, digUp, sellSeed, state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
 
 syncAllPlots();
 ui.refresh();

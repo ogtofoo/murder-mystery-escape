@@ -26,7 +26,7 @@ python3 -m http.server 8777
 | `G` | Take out / put away the shovel |
 | Hold `E` | With the shovel out: dig up the plant you're looking at |
 | `B` | Seed shop (seeds, packs, almanac) |
-| `V` | Toggle **first person ↔ third person** |
+| `V` | Toggle **first person ↔ third person** (first person uses a wider 90° field of view) |
 | `Esc` | Close the shop / back to the menu |
 
 ### Controller
@@ -95,6 +95,13 @@ earns far more per plot, and much more per second once established. The two sing
 crops in the upper tiers are priced as the fast-payback alternative: a cheaper seed that pays
 out sooner, if you don't mind replanting. Every seed's line in the shop spells out the
 harvests, the regrow time and the lifetime total.
+
+### Selling seeds back
+
+Every seed row in the shop has a **sell** button: the shop buys seeds back at 50% of what they
+cost, one at a time or the whole stack at once. Handy for dumping a stack of commons after a
+seed pack upgrades you, or clawing back half of a seed you bought by mistake. Digging a crop
+up with the shovel refunds nothing — the seed is already in the ground.
 
 ### The shovel
 

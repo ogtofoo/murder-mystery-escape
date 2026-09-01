@@ -8,6 +8,8 @@ const SPRINT = 9.0;
 const GRAVITY = 22;
 const JUMP = 8.0;
 const EYE = 1.62;
+const FOV_FIRST = 90;    // roomier when you're inside the gardener's head
+const FOV_THIRD = 72;
 const WORLD_RADIUS = 72;
 
 export class Player {
@@ -175,6 +177,13 @@ export class Player {
   }
 
   updateCamera(dt) {
+    // Ease between the two field-of-view settings so switching isn't a jolt.
+    const wantFov = this.view === 'first' ? FOV_FIRST : FOV_THIRD;
+    if (Math.abs(this.camera.fov - wantFov) > 0.05) {
+      this.camera.fov += (wantFov - this.camera.fov) * (1 - Math.exp(-12 * dt));
+      this.camera.updateProjectionMatrix();
+    }
+
     const head = this.headPosition();
     const dir = this.lookDirection();
 
