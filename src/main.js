@@ -8,8 +8,11 @@ import { buildPlant, animatePlant } from './plants.js';
 import { Player } from './player.js';
 import { UI } from './ui.js';
 import { sfx } from './sfx.js';
+import { GamepadInput, BTN } from './gamepad.js';
 
 const REACH = 6.5;
+const NAV_FIRST = 0.36;   // hold-to-repeat timings for stick/d-pad menu navigation
+const NAV_REPEAT = 0.14;
 const STALL_RANGE = 5.5;
 
 const canvas = document.getElementById('game');
@@ -68,6 +71,7 @@ function buyPack(packId) {
     state.stats.best = best;
   }
   sfx.pack(TIERS[PLANTS_BY_ID[best].tier].order);
+  gamepad.rumble(0.6, 260);
   ui.showPack(pack, rolled);
   ui.refresh();
   save();
@@ -109,6 +113,7 @@ function harvest(index) {
   syncPlot(index);
   ui.toast(`Harvested ${p.name} &nbsp;<b class="coin">+₪${fmt(p.sell)}</b>`, 'gold');
   sfx.harvest(TIERS[p.tier].order);
+  gamepad.rumble(0.25 + TIERS[p.tier].order * 0.08, 90 + TIERS[p.tier].order * 20);
   ui.refresh();
   save();
 }
@@ -314,10 +319,72 @@ addEventListener('beforeunload', save);
 document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
 setInterval(save, 5000);
 
-function startPlaying() {
+function startPlaying(fromPad = false) {
   ui.showMenu(false);
   sfx.enable();
-  player.requestLock();
+  // Pointer lock needs a mouse/keyboard gesture; a controller start skips it.
+  if (!fromPad) player.requestLock();
+}
+
+// ---------------------------------------------------------------- gamepad
+
+const gamepad = new GamepadInput(pad => {
+  ui.showPadHints();
+  ui.toast(`Controller connected — ${pad.id.replace(/\s*\(.*\)\s*/, '') || 'gamepad'}`, 'gold');
+  document.querySelector('.padhelp')?.classList.remove('hidden');
+});
+
+let navHold = 0;
+let navDir = 0;
+
+/** Route one frame of controller input, either to the menus or to the world. */
+function updateGamepad(dt) {
+  const pad = gamepad.poll();
+  if (!pad) { player.pad = null; navDir = 0; return; }
+  if (!ui.padActive) ui.showPadHints();
+
+  const { pressed } = pad;
+
+  if (ui.menuOpen) {
+    player.pad = null;
+    if (pressed.has(BTN.A) || pressed.has(BTN.START)) startPlaying(true);
+    return;
+  }
+
+  if (ui.packOpen) {
+    player.pad = null;
+    if (pressed.has(BTN.A) || pressed.has(BTN.B) || pressed.has(BTN.START)) ui.closePack();
+    return;
+  }
+
+  if (ui.shopOpen) {
+    player.pad = null;
+    if (pressed.has(BTN.A)) ui.padActivate();
+    if (pressed.has(BTN.B) || pressed.has(BTN.Y) || pressed.has(BTN.START)) ui.toggleShop(false);
+    if (pressed.has(BTN.LB) || pressed.has(BTN.LEFT)) ui.padTab(-1);
+    if (pressed.has(BTN.RB) || pressed.has(BTN.RIGHT)) ui.padTab(1);
+
+    // Stick or d-pad scrolls the list, with hold-to-repeat.
+    let dir = 0;
+    if (pad.held.has(BTN.DOWN) || pad.move.y > 0.5) dir = 1;
+    else if (pad.held.has(BTN.UP) || pad.move.y < -0.5) dir = -1;
+    if (dir !== navDir) { navDir = dir; navHold = 0; if (dir) ui.padFocus(dir); }
+    else if (dir) {
+      navHold += dt;
+      if (navHold > NAV_FIRST) { navHold = NAV_FIRST - NAV_REPEAT; ui.padFocus(dir); }
+    }
+    return;
+  }
+
+  // In the world.
+  player.pad = pad;
+  if (pressed.has(BTN.A)) interact();
+  if (pressed.has(BTN.Y)) ui.toggleShop(true);
+  if (pressed.has(BTN.B)) { const v = player.toggleView(); ui.toast(v === 'first' ? 'First person' : 'Third person'); }
+  if (pressed.has(BTN.LB)) ui.cycleSelection(-1);
+  if (pressed.has(BTN.RB)) ui.cycleSelection(1);
+  if (pressed.has(BTN.R3)) { player.camDistance = player.camDistance > 4 ? 3.2 : 6.0; }
+  if (pressed.has(BTN.START) || pressed.has(BTN.BACK)) { document.exitPointerLock?.(); ui.showMenu(true); }
 }
 
 // ---------------------------------------------------------------- loop
@@ -331,6 +398,7 @@ function tick() {
   const t = clock.elapsedTime;
   const active = !ui.modalOpen;
 
+  updateGamepad(dt);
   player.update(dt, t, active);
   updateTarget();
   updatePrompt();
@@ -363,7 +431,7 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { state, world, player, ui, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
+window.game = { state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
 
 syncAllPlots();
 ui.refresh();

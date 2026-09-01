@@ -27,6 +27,7 @@ export class Player {
     this.speed01 = 0;
     this.keys = new Set();
     this.locked = false;
+    this.pad = null;         // per-frame gamepad sample, set by main
     this.dragging = false;   // click-drag look, for when pointer lock is unavailable
     this._smoothCam = new THREE.Vector3();
     this._first = true;
@@ -62,7 +63,11 @@ export class Player {
   }
 
   requestLock() {
-    if (document.pointerLockElement !== this.dom) this.dom.requestPointerLock?.();
+    if (document.pointerLockElement === this.dom) return;
+    try {
+      const r = this.dom.requestPointerLock?.();
+      if (r && typeof r.catch === 'function') r.catch(() => {});
+    } catch (err) { /* not allowed right now; click the page to capture the mouse */ }
   }
 
   toggleView() {
@@ -93,19 +98,29 @@ export class Player {
     if (k.has('KeyA') || k.has('ArrowLeft')) fx -= 1;
     if (k.has('KeyD') || k.has('ArrowRight')) fx += 1;
 
-    const len = Math.hypot(fx, fz);
-    const sprinting = k.has('ShiftLeft') || k.has('ShiftRight');
+    // Analog stick adds to the keyboard; stick up (-y) is forward.
+    const pad = inputEnabled ? this.pad : null;
+    if (pad) {
+      fx += pad.move.x;
+      fz -= pad.move.y;
+      this.yaw -= pad.look.x * pad.lookSpeed * dt;
+      this.pitch -= pad.look.y * pad.lookSpeed * dt;
+      this.pitch = Math.max(-1.35, Math.min(1.2, this.pitch));
+    }
+
+    let len = Math.hypot(fx, fz);
+    if (len > 1) { fx /= len; fz /= len; len = 1; }
+    const sprinting = k.has('ShiftLeft') || k.has('ShiftRight') || !!pad?.sprint;
     const speed = sprinting ? SPRINT : WALK;
 
-    if (len > 0) {
-      fx /= len; fz /= len;
-      // Forward is -Z rotated by yaw; matches the camera's look direction.
+    if (len > 0.01) {
+      // Forward is (sin yaw, cos yaw); right is forward x up = (-cos yaw, sin yaw).
       const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
-      const dx = fx * cos + fz * sin;
-      const dz = -fx * sin + fz * cos;
+      const dx = fz * sin - fx * cos;
+      const dz = fz * cos + fx * sin;
       this.pos.x += dx * speed * dt;
       this.pos.z += dz * speed * dt;
-      this.speed01 = sprinting ? 1 : 0.6;
+      this.speed01 = (sprinting ? 1 : 0.6) * Math.min(1, len);
       // Face the direction of travel (third person only; first person always faces the camera).
       const target = Math.atan2(dx, dz);
       this.model.rotation.y = dampAngle(this.model.rotation.y, target, 14, dt);
@@ -120,7 +135,7 @@ export class Player {
       this.pos.z *= WORLD_RADIUS / r;
     }
 
-    if (this.grounded && k.has('Space')) { this.vy = JUMP; this.grounded = false; }
+    if (this.grounded && (k.has('Space') || pad?.jump)) { this.vy = JUMP; this.grounded = false; }
     this.vy -= GRAVITY * dt;
     this.pos.y += this.vy * dt;
     if (this.pos.y <= 0) { this.pos.y = 0; this.vy = 0; this.grounded = true; }

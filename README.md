@@ -27,6 +27,28 @@ python3 -m http.server 8777
 | `V` | Toggle **first person ↔ third person** |
 | `Esc` | Close the shop / back to the menu |
 
+### Controller
+
+Plug in any standard-mapping gamepad (Xbox, PlayStation, most USB pads) and it just works —
+the game switches its on-screen hints over as soon as it sees one.
+
+| Button | Action |
+| --- | --- |
+| Left stick | Move |
+| Right stick | Look |
+| `A` | Plant / harvest / buy plot / confirm |
+| `B` | Toggle first ↔ third person (closes the shop when it's open) |
+| `X` | Jump |
+| `Y` | Open the seed shop |
+| `RT` / `LT` / `L3` | Sprint |
+| `LB` / `RB` | Previous / next seed — and previous / next shop tab |
+| D-pad or left stick | Move the highlight through the shop list |
+| `R3` | Snap the third-person camera close / far |
+| `Start` | Menu |
+
+The shop, the pack reveal and the title screen are all fully navigable with the pad, and it
+rumbles on a harvest (harder for higher tiers) and when a seed pack opens.
+
 ## How it plays
 
 1. You spawn with **₪1**. Press `B` and buy the carrot seed — it costs exactly one sheckle.
@@ -65,6 +87,7 @@ src/
   gardener.js     the 3D gardener and their walk cycle
   player.js       movement, mouse look, first/third person camera
   ui.js           HUD, hotbar, shop tabs, pack reveals, toasts
+  gamepad.js      controller input: sticks, edge-triggered buttons, rumble
   sfx.js          small WebAudio blips
 ```
 

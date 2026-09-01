@@ -11,6 +11,8 @@ export class UI {
     this.selected = null;
     this.shopOpen = false;
     this.tab = 'seeds';
+    this.padActive = false;   // draws a focus ring once a controller is in use
+    this.focusIndex = 0;
 
     this.el = {
       money: $('#money'), shopmoney: $('#shopmoney'),
@@ -124,7 +126,46 @@ export class UI {
     if (this.tab === 'seeds') this.renderSeeds();
     else if (this.tab === 'packs') this.renderPacks();
     else this.renderAlmanac();
+    this.applyFocus();
   }
+
+  // ---------- controller navigation ----------
+  focusList() {
+    if (!this.shopOpen) return [];
+    return [...this.el.body.querySelectorAll('.buy:not([disabled])')];
+  }
+
+  applyFocus(scroll = false) {
+    const list = this.focusList();
+    for (const el of this.el.body.querySelectorAll('.focused')) el.classList.remove('focused');
+    if (!this.padActive || !list.length) return;
+    this.focusIndex = Math.max(0, Math.min(list.length - 1, this.focusIndex));
+    const el = list[this.focusIndex];
+    el.classList.add('focused');
+    if (scroll) el.scrollIntoView({ block: 'nearest' });
+  }
+
+  padFocus(delta) {
+    const list = this.focusList();
+    if (!list.length) return;
+    this.focusIndex = (this.focusIndex + delta + list.length) % list.length;
+    this.applyFocus(true);
+  }
+
+  padActivate() {
+    const list = this.focusList();
+    list[this.focusIndex]?.click();
+  }
+
+  padTab(dir) {
+    const tabs = [...document.querySelectorAll('.tab')];
+    const i = tabs.findIndex(t => t.classList.contains('active'));
+    this.focusIndex = 0;
+    tabs[(i + dir + tabs.length) % tabs.length].click();
+  }
+
+  get packOpen() { return !this.el.packmodal.classList.contains('hidden'); }
+  closePack() { this.el.packmodal.classList.add('hidden'); }
 
   renderSeeds() {
     let html = '';
@@ -212,6 +253,20 @@ export class UI {
       </div>`;
     }).join('');
     this.el.packmodal.classList.remove('hidden');
+  }
+
+  /** Swap the corner hint over to controller glyphs. */
+  showPadHints() {
+    if (this.padActive) return;
+    this.padActive = true;
+    const hint = document.querySelector('#hint');
+    if (hint) hint.textContent = 'A use · Y shop · X jump · LB/RB seed · Start menu';
+    const play = document.querySelector('#playbtn');
+    if (play) play.textContent = 'Press A to play';
+    const foot = document.querySelector('.panel footer');
+    if (foot) foot.innerHTML = foot.innerHTML.replace('press <kbd>B</kbd> or <kbd>Esc</kbd> to close',
+      '<b>A</b> buy · <b>LB/RB</b> tabs · <b>B</b> close');
+    this.applyFocus(true);
   }
 }
 
