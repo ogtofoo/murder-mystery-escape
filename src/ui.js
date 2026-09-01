@@ -277,11 +277,13 @@ export class UI {
     this.el.body.innerHTML = html;
   }
 
-  showPack(pack, ids) {
+  showPack(pack, entries) {
+    const cards = entries.map(e => (typeof e === 'string' ? { id: e } : e));
     this.el.packtitle.textContent = `${pack.name} — opened!`;
-    this.el.packcards.innerHTML = ids.map((id, i) => {
-      const p = PLANTS_BY_ID[id], t = TIERS[p.tier];
-      return `<div class="card" style="border-color:${t.css}; animation-delay:${i * 0.14}s; box-shadow:0 0 26px ${t.css}33">
+    this.el.packcards.innerHTML = cards.map((c, i) => {
+      const p = PLANTS_BY_ID[c.id], t = TIERS[p.tier];
+      return `<div class="card" style="border-color:${t.css}; animation-delay:${i * 0.18}s; box-shadow:0 0 26px ${t.css}33">
+        ${c.isNew ? `<div class="new" style="background:${t.css}">NEW</div>` : ''}
         <div class="t" style="color:${t.css}">${t.name}</div>
         <div class="n">${p.name}</div>
         <div class="v">₪${fmt(p.sell)} per pick${p.harvests > 1 ? ` · ×${p.harvests}` : ''}</div>

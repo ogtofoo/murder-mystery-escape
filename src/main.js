@@ -1,7 +1,7 @@
 // Sheckle Garden — entry point: loop, interaction, economy glue.
 
 import * as THREE from 'three';
-import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollSeed, plotCost, PLOT_COUNT, refundValue, SEED_REFUND } from './data.js';
+import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollPack, plotCost, PLOT_COUNT, refundValue, SEED_REFUND } from './data.js';
 import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount,
          growth, isRipe, isRegrowing, harvestsLeft, cycleSeconds } from './state.js';
 import { buildWorld } from './world.js';
@@ -100,22 +100,22 @@ function buyPack(packId) {
   const pack = PACKS.find(p => p.id === packId);
   if (!pack) return;
   if (!spend(pack.cost)) { ui.toast('That pack is out of your league — for now.', 'bad'); sfx.deny(); return; }
-  const rolled = [];
-  let best = null;
-  for (let i = 0; i < pack.seeds; i++) {
-    const id = rollSeed(pack.weights);
-    rolled.push(id);
-    addSeed(id, 1);
-    const t = TIERS[PLANTS_BY_ID[id].tier].order;
-    if (!best || t > TIERS[PLANTS_BY_ID[best].tier].order) best = id;
-  }
+  const rolled = rollPack(pack);
+  const firstTime = new Set(rolled.filter(id => !state.discovered[id]));
+  for (const id of rolled) addSeed(id, 1);
+
+  const rank = id => TIERS[PLANTS_BY_ID[id].tier].order;
+  const best = rolled.reduce((a, b) => (rank(b) > rank(a) ? b : a));
+  // Reveal worst to best, so the card everyone is waiting for lands last.
+  const reveal = [...rolled].sort((a, b) => rank(a) - rank(b))
+    .map(id => ({ id, isNew: firstTime.has(id) }));
   state.stats.packsOpened++;
   if (!state.stats.best || TIERS[PLANTS_BY_ID[best].tier].order > TIERS[PLANTS_BY_ID[state.stats.best].tier].order) {
     state.stats.best = best;
   }
   sfx.pack(TIERS[PLANTS_BY_ID[best].tier].order);
   gamepad.rumble(0.6, 260);
-  ui.showPack(pack, rolled);
+  ui.showPack(pack, reveal);
   ui.refresh();
   save();
 }

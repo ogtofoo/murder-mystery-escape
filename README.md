@@ -115,6 +115,11 @@ Nothing is refunded, and while the shovel is out `E` won't harvest — press `G`
 
 Common → Uncommon → Rare → Legendary → Mythic → Prismatic → Transcendent → **SUPER**
 
+A pack never gives you the same species twice — seeds are drawn without replacement, and a
+tier drops out of the draw once all its plants are taken, so its weight passes to the tiers
+still in play and the advertised odds hold. Cards are revealed lowest tier first, and anything
+new to your almanac gets a NEW badge.
+
 Common seeds are always on the shelf. Everything from Rare up has to be pulled out of a seed
 pack first; once a species is discovered it stays in the shop (and the almanac) so you can buy
 it directly. Prismatic and above hue-cycle and glow in the world.

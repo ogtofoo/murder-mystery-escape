@@ -129,13 +129,31 @@ export function fmt(n) {
   return s.replace(/\.0+$/, '') + UNITS[u];
 }
 
-/** Pick a plant id from a pack's tier weights. */
-export function rollSeed(weights) {
-  const entries = Object.entries(weights);
-  const total = entries.reduce((a, [, w]) => a + w, 0);
-  let r = Math.random() * total;
-  let tier = entries[0][0];
-  for (const [t, w] of entries) { r -= w; if (r <= 0) { tier = t; break; } }
-  const pool = PLANTS.filter(p => p.tier === tier);
-  return pool[Math.floor(Math.random() * pool.length)].id;
+/**
+ * Roll a pack's contents: seeds are drawn without replacement, so one pack
+ * never hands you the same species twice. A tier drops out of the draw once
+ * all of its plants are taken, and its weight goes to the tiers still in play.
+ */
+export function rollPack(pack) {
+  const chosen = [];
+  const used = new Set();
+
+  for (let n = 0; n < pack.seeds; n++) {
+    const open = Object.entries(pack.weights)
+      .filter(([tier]) => PLANTS.some(p => p.tier === tier && !used.has(p.id)));
+    // Only if the pack asks for more seeds than exist can it repeat itself.
+    const pool = open.length ? open : Object.entries(pack.weights);
+
+    const total = pool.reduce((sum, [, w]) => sum + w, 0);
+    let r = Math.random() * total;
+    let tier = pool[pool.length - 1][0];
+    for (const [t, w] of pool) { r -= w; if (r <= 0) { tier = t; break; } }
+
+    let candidates = PLANTS.filter(p => p.tier === tier && !used.has(p.id));
+    if (!candidates.length) candidates = PLANTS.filter(p => p.tier === tier);
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    chosen.push(pick.id);
+    used.add(pick.id);
+  }
+  return chosen;
 }
