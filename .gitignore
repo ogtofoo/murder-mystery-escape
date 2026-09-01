@@ -1,0 +1,14 @@
+# Server runtime state: the BDS binary, server.properties, and live worlds.
+# Never commit this — it's large, machine-specific, and churns constantly.
+data/
+
+# Local secrets / host-specific config.
+.env
+
+# Map archives are big binaries; commit deliberately with `git add -f` if you
+# want a specific release checked in, or use backups/ + object storage instead.
+packs/*
+!packs/.gitkeep
+
+backups/
+.DS_Store
