@@ -42,6 +42,7 @@ const CYL = () => geo('cyl', () => new THREE.CylinderGeometry(0.5, 0.5, 1, 6));
 const LEAF = () => geo('leaf', () => new THREE.ConeGeometry(0.28, 1, 4));
 const RING = () => geo('ring', () => new THREE.TorusGeometry(0.5, 0.11, 5, 12));
 const OCTA = () => geo('octa', () => new THREE.OctahedronGeometry(0.5, 0));
+const RIB = () => geo('rib', () => new THREE.CylinderGeometry(0.42, 0.5, 1, 3));
 
 /**
  * Build the mesh for a plant. Returns a Group whose base sits at y=0,
@@ -103,6 +104,52 @@ export function buildPlant(plant) {
         g.add(fruit(p));
       }
       g.add(fruit(mesh(SPHERE(), mat(0xfff59d, plant.tier), [0, 0.9, 0], 0.26)));
+      break;
+    }
+    case 'pitaya': {
+      // A climbing cactus: three ribbed stems, with a scaly ovoid fruit on top.
+      const stemMat = mat(cB, plant.tier);
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2 + 0.5;
+        const h = 0.66 + (i % 2) * 0.18;
+        const stem = mesh(RIB(), stemMat, [Math.cos(a) * 0.19, h / 2, Math.sin(a) * 0.19], [0.16, h, 0.16]);
+        stem.rotation.set(Math.cos(a) * 0.24, a, -Math.sin(a) * 0.24);
+        g.add(stem);
+      }
+
+      const flesh = mat(cA, plant.tier);
+      const tipMat = mat(0x7cb342, plant.tier);
+
+      const berry = new THREE.Group();
+      berry.position.set(0, 0.86, 0);
+      const rx = 0.33, ry = 0.46;
+      berry.add(mesh(SPHERE(), flesh, [0, 0, 0], [rx * 2, ry * 2, rx * 2]));
+
+      // Bracts: broad flat scales lying back along the fruit, green at the tips.
+      for (let i = 0; i < 12; i++) {
+        const th = 0.5 + (i % 4) * 0.52;             // pole to pole down the fruit
+        const ph = i * 2.399;                        // golden angle, so they don't line up
+        const nx = Math.sin(th) * Math.cos(ph), ny = Math.cos(th), nz = Math.sin(th) * Math.sin(ph);
+        const pivot = new THREE.Group();
+        pivot.position.set(nx * rx * 0.9, ny * ry * 0.9, nz * rx * 0.9);
+        // Aim mostly outward but swept upward, so the scale hugs the fruit.
+        pivot.lookAt(nx * 3, ny * 3 + 1.6, nz * 3);
+        const scale = mesh(LEAF(), flesh, [0, 0, 0.03], [0.95, 0.16, 0.4]);
+        scale.rotation.x = -Math.PI / 2;             // cone points along the pivot's +Z
+        const tip = mesh(LEAF(), tipMat, [0, 0, 0.13], [0.5, 0.1, 0.24]);
+        tip.rotation.x = -Math.PI / 2;
+        pivot.add(scale, tip);
+        berry.add(pivot);
+      }
+      // Green crown where the flower was.
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2;
+        const c = mesh(LEAF(), tipMat, [Math.cos(a) * 0.08, ry + 0.06, Math.sin(a) * 0.08], [0.34, 0.26, 0.34]);
+        c.rotation.set(Math.cos(a) * 0.5, 0, -Math.sin(a) * 0.5);
+        berry.add(c);
+      }
+      fruit(berry);
+      g.add(berry);
       break;
     }
     case 'tree': {

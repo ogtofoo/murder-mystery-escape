@@ -13,7 +13,7 @@ export const TIERS = {
 
 export const TIER_ORDER = Object.values(TIERS).sort((a,b)=>a.order-b.order).map(t=>t.id);
 
-// kind drives the 3D model: root | leaf | bush | vine | flower | tree | orb
+// kind drives the 3D model: root | leaf | bush | vine | flower | pitaya | tree | orb
 export const PLANTS = [
   // ---- Common ----
   { id:'carrot',   name:'Carrot',        tier:'common', kind:'root',  cost:1,     grow:8,   sell:4,     colors:[0xff8f3f,0x66bb6a] },
@@ -26,7 +26,7 @@ export const PLANTS = [
   // ---- Rare ----
   { id:'melon',    name:'Watermelon',    tier:'rare', kind:'vine',  cost:3200,   grow:45,  sell:11000,  colors:[0x2e7d32,0x66bb6a] },
   { id:'pumpkin',  name:'Pumpkin',       tier:'rare', kind:'vine',  cost:12000,  grow:55,  sell:44000,  colors:[0xef6c00,0x558b2f] },
-  { id:'dragon',   name:'Dragonfruit',   tier:'rare', kind:'flower',cost:45000,  grow:70,  sell:175000, colors:[0xff2d78,0x76ff03] },
+  { id:'dragon',   name:'Dragonfruit',   tier:'rare', kind:'pitaya',cost:45000,  grow:70,  sell:175000, colors:[0xff2d78,0x4caf50] },
   // ---- Legendary ----
   { id:'goldapple',name:'Golden Apple',  tier:'legendary', kind:'tree', cost:180000,   grow:90,  sell:760000,   colors:[0xffd54f,0x4e342e] },
   { id:'starcorn', name:'Star Corn',     tier:'legendary', kind:'leaf', cost:700000,   grow:110, sell:4600000,  colors:[0xfff176,0x9ccc65] },
@@ -54,10 +54,10 @@ export const PLANTS = [
  * pull out of the ground whole (roots, leafy greens, corn) are one-and-done;
  * anything that fruits from a standing plant keeps producing.
  */
-const HARVESTS_BY_KIND = { root: 1, leaf: 1, bush: 4, vine: 3, flower: 5, tree: 6, orb: 8 };
+const HARVESTS_BY_KIND = { root: 1, leaf: 1, bush: 4, vine: 3, flower: 5, pitaya: 5, tree: 6, orb: 8 };
 
 // Regrowth is faster than the first grow — established plants pay off quicker.
-const REGROW_RATIO = { tree: 0.5, orb: 0.5, flower: 0.55, bush: 0.55, vine: 0.6 };
+const REGROW_RATIO = { tree: 0.5, orb: 0.5, flower: 0.55, pitaya: 0.55, bush: 0.55, vine: 0.6 };
 
 for (const p of PLANTS) {
   p.harvests = p.harvests ?? HARVESTS_BY_KIND[p.kind] ?? 1;

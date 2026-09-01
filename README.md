@@ -149,7 +149,7 @@ src/
   data.js         tiers, the 24 plants, seed packs, land pricing, number formatting
   state.js        save file, money, inventory, growth timers
   world.js        sky, lights, ground, plot grid, shop stall, scenery
-  plants.js       procedural low-poly crop models (root/leaf/bush/vine/flower/tree/orb)
+  plants.js       procedural low-poly crop models (root/leaf/bush/vine/flower/pitaya/tree/orb)
   gardener.js     the 3D gardener and their walk cycle
   player.js       movement, mouse look, first/third person camera
   ui.js           HUD, hotbar, shop tabs, pack reveals, toasts
