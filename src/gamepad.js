@@ -18,6 +18,16 @@ function curve(v) {
   return Math.sign(v) * n * n;
 }
 
+/**
+ * Which axes carry the right stick. Standard mapping says 2 and 3, but some
+ * macOS drivers (and older Xbox pads) expose triggers as axes and push the
+ * right stick out to 3 and 4.
+ */
+export function lookAxes(pad) {
+  if (pad.mapping === 'standard' || pad.axes.length < 6) return [2, 3];
+  return [3, 4];
+}
+
 export class GamepadInput {
   constructor(onConnect) {
     this.index = null;
@@ -58,16 +68,24 @@ export class GamepadInput {
     });
 
     const ax = pad.axes;
+    const [lx, ly] = lookAxes(pad);
     return {
       id: pad.id,
+      mapping: pad.mapping,
       move: { x: curve(ax[0] ?? 0), y: curve(ax[1] ?? 0) },
-      look: { x: curve(ax[2] ?? 0), y: curve(ax[3] ?? 0) },
+      look: { x: curve(ax[lx] ?? 0), y: curve(ax[ly] ?? 0) },
       lookSpeed: LOOK_SPEED,
       sprint: this.held.has(BTN.RT) || this.held.has(BTN.LT) || this.held.has(BTN.L3),
       jump: this.held.has(BTN.X),
       pressed: this.pressed,
       held: this.held,
     };
+  }
+
+  /** Every pad the browser will admit to, for the diagnostics panel. */
+  listAll() {
+    if (!navigator.getGamepads) return [];
+    return [...navigator.getGamepads()].filter(Boolean);
   }
 
   /** Short rumble, where the browser and pad support it. */

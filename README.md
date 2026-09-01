@@ -49,6 +49,24 @@ the game switches its on-screen hints over as soon as it sees one.
 The shop, the pack reveal and the title screen are all fully navigable with the pad, and it
 rumbles on a harvest (harder for higher tiers) and when a seed pack opens.
 
+**Controller not responding?** Press `P` in game (or "🎮 Controller test" on the title screen)
+for a live readout of every pad the browser can see, its mapping, its sticks and which button
+numbers you're pressing. The usual causes, in order:
+
+1. **Press a button on the pad with the game window in front.** Browsers hide gamepads from a
+   page until a button is pressed on them — nothing at all is reported before that.
+2. **Check the pad is actually paired to the Mac**, not just powered on: System Settings →
+   Bluetooth should show *Xbox Wireless Controller — Connected*. To pair, hold the Xbox button
+   until it flashes fast, then hold the small button on the back. A USB-C cable also works and
+   skips pairing entirely. (Only Bluetooth-capable Xbox pads — Series X|S and later Xbox One
+   models — pair with macOS; the old Xbox 360 pad needs a third-party driver.)
+3. **Use Chrome.** Safari's Gamepad API support is inconsistent.
+4. If **hardwaretester.com/gamepad** doesn't see it either, the problem is the Mac or the
+   pairing rather than the game.
+
+The title screen shows a build stamp (e.g. `build 4 · 2026-09-01`) so you can confirm which
+version you're actually running after a `git pull`.
+
 ## How it plays
 
 1. You spawn with **₪1**. Press `B` and buy the carrot seed — it costs exactly one sheckle.

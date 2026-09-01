@@ -9,6 +9,8 @@ import { Player } from './player.js';
 import { UI } from './ui.js';
 import { sfx } from './sfx.js';
 import { GamepadInput, BTN } from './gamepad.js';
+import { renderPadTest } from './padtest.js';
+import { BUILD_LABEL } from './build.js';
 
 const REACH = 6.5;
 const NAV_FIRST = 0.36;   // hold-to-repeat timings for stick/d-pad menu navigation
@@ -311,6 +313,7 @@ window.addEventListener('keydown', e => {
       if (ui.shopOpen) { ui.toggleShop(false); e.preventDefault(); }
       break;
     case 'KeyQ': ui.cycleSelection(-1); break;
+    case 'KeyP': togglePadTest(); break;
     default:
       if (/^Digit[1-9]$/.test(e.code)) ui.selectIndex(Number(e.code.slice(5)) - 1);
   }
@@ -408,6 +411,18 @@ function updateGamepad(dt) {
   if (pressed.has(BTN.START) || pressed.has(BTN.BACK)) { document.exitPointerLock?.(); ui.showMenu(true); }
 }
 
+const padTestEl = document.getElementById('padtest');
+let padTestClock = 0;
+
+function togglePadTest(force) {
+  const show = force ?? padTestEl.classList.contains('hidden');
+  padTestEl.classList.toggle('hidden', !show);
+  if (show) renderPadTest(padTestEl, gamepad);
+}
+document.getElementById('padtestbtn').addEventListener('click', () => togglePadTest());
+document.getElementById('buildstamp').textContent = BUILD_LABEL;
+console.log(`%cSheckle Garden — ${BUILD_LABEL}`, 'color:#f0c14b;font-weight:bold');
+
 // ---------------------------------------------------------------- loop
 
 const clock = new THREE.Clock();
@@ -420,6 +435,10 @@ function tick() {
   const active = !ui.modalOpen;
 
   updateGamepad(dt);
+  if (!padTestEl.classList.contains('hidden')) {
+    padTestClock += dt;
+    if (padTestClock > 0.08) { padTestClock = 0; renderPadTest(padTestEl, gamepad); }
+  }
   player.update(dt, t, active);
   updateTarget();
   updatePrompt();
@@ -452,7 +471,7 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
+window.game = { build: BUILD_LABEL, state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
 
 syncAllPlots();
 ui.refresh();

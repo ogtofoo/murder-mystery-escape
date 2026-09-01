@@ -202,3 +202,27 @@ kbd {
   .slot { width: 62px; }
   #hint { display: none; }
 }
+
+/* ---------- controller diagnostics ---------- */
+#padtest {
+  position: fixed; right: 16px; top: 16px; width: min(430px, 92vw); max-height: 88vh; overflow-y: auto;
+  background: rgba(12,18,13,0.96); border: 1px solid var(--line); border-radius: 14px;
+  padding: 14px 16px; font-size: 13px; line-height: 1.5; z-index: 60;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+}
+#padtest h4 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0.4px; }
+#padtest ol { margin: 8px 0; padding-left: 20px; }
+#padtest li { margin-bottom: 7px; }
+#padtest p { margin: 8px 0; }
+#padtest .warn { color: #ffcf8a; }
+#padtest .ok { color: var(--good); }
+#padtest .dim { opacity: 0.6; font-size: 12px; }
+#padtest .pad { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
+#padtest .padid { font-weight: 700; word-break: break-word; }
+#padtest .axes { margin: 10px 0; }
+#padtest .axes label { display: block; font-size: 11px; opacity: 0.75; margin-top: 6px; font-variant-numeric: tabular-nums; }
+#padtest .axis { position: relative; height: 7px; background: rgba(255,255,255,0.1); border-radius: 4px; margin-top: 3px; }
+#padtest .axis i { position: absolute; top: -3px; width: 9px; height: 13px; margin-left: -4px; border-radius: 3px; background: #9fb0a0; }
+#padtest .axis i.live { background: var(--gold); }
+#padtest .pressed { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.12); }
+#buildstamp { margin-top: 10px; font-size: 11px; opacity: 0.4; letter-spacing: 1px; }
