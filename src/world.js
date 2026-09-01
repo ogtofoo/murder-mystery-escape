@@ -1,22 +1,7 @@
 // Scene construction: sky, lights, ground, garden plots, shop stall, scenery.
 
 import * as THREE from 'three';
-import { GRID_SIZE, PLOT_SPACING, PLOT_COUNT, fmt, plotCost } from './data.js';
-
-/** Plot slots ordered so the ones you unlock first sit next to each other. */
-export function plotLayout() {
-  const cells = [];
-  const half = (GRID_SIZE - 1) / 2;
-  for (let x = 0; x < GRID_SIZE; x++) {
-    for (let z = 0; z < GRID_SIZE; z++) {
-      const px = (x - half) * PLOT_SPACING;
-      const pz = (z - half) * PLOT_SPACING;
-      cells.push({ x: px, z: pz, d: Math.hypot(px, pz), a: Math.atan2(pz, px) });
-    }
-  }
-  cells.sort((p, q) => (p.d - q.d) || (p.a - q.a));
-  return cells.slice(0, PLOT_COUNT);
-}
+import { GRID_SIZE, PLOT_SPACING, PLOT_COUNT, fmt, plotCost, plotLayout } from './data.js';
 
 function noiseTexture(base, speck, size = 128, density = 0.5) {
   const c = document.createElement('canvas');

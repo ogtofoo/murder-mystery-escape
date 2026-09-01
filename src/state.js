@@ -1,6 +1,6 @@
 // Persistent game state: money, seeds, owned plots, planted crops.
 
-import { PLOT_COUNT, PLANTS_BY_ID, plotCost } from './data.js';
+import { PLOT_COUNT, PLANTS_BY_ID, plotCost, plotLayout, LAYOUT_ID } from './data.js';
 
 const SAVE_KEY = 'sheckle-garden-save-v1';
 export const SAVE_VERSION = 2;
@@ -8,6 +8,7 @@ export const SAVE_VERSION = 2;
 function freshState() {
   return {
     version: SAVE_VERSION,
+    layout: LAYOUT_ID,
     money: 1,
     seeds: { carrot: 0 },
     discovered: { carrot: true, radish: true, lettuce: true },
@@ -44,16 +45,38 @@ function sanitize(raw) {
   }
   for (const id of Object.keys(s.seeds)) s.discovered[id] = true;
 
-  const plots = Array.isArray(raw.plots) ? raw.plots : [];
-  s.plots = new Array(PLOT_COUNT).fill(null).map((_, i) => {
-    const p = plots[i];
+  const clean = p => {
     if (!p || !PLANTS_BY_ID[p.plantId] || !Number.isFinite(p.plantedAt)) return null;
     const plant = PLANTS_BY_ID[p.plantId];
     // Saves from before multi-harvest have no `taken`; they start fresh.
     const taken = Number.isFinite(p.taken) ? Math.min(Math.max(0, Math.floor(p.taken)), plant.harvests - 1) : 0;
     // A clock set backwards shouldn't leave a crop growing forever.
-    return { plantId: p.plantId, plantedAt: Math.min(p.plantedAt, Date.now()), taken };
-  });
+    const out = { plantId: p.plantId, plantedAt: Math.min(p.plantedAt, Date.now()), taken };
+    if (Number.isFinite(p.x) && Number.isFinite(p.z)) { out.x = p.x; out.z = p.z; }
+    return out;
+  };
+
+  const raws = Array.isArray(raw.plots) ? raw.plots : [];
+  s.plots = new Array(PLOT_COUNT).fill(null);
+
+  if (raw.layout && raw.layout !== LAYOUT_ID) {
+    // The garden's shape changed between versions, so plot index no longer means
+    // the same square. Put every crop back on the bed nearest where it was.
+    const cells = plotLayout();
+    for (const p of raws) {
+      const c = clean(p);
+      if (!c) continue;
+      let best = -1, bestD = Infinity;
+      cells.forEach((cell, i) => {
+        if (s.plots[i]) return;
+        const d = Number.isFinite(c.x) ? Math.hypot(cell.x - c.x, cell.z - c.z) : Infinity;
+        if (d < bestD) { bestD = d; best = i; }
+      });
+      if (best >= 0) s.plots[best] = c;
+    }
+  } else {
+    for (let i = 0; i < PLOT_COUNT; i++) s.plots[i] = clean(raws[i]);
+  }
   return s;
 }
 
@@ -68,6 +91,11 @@ function load() {
 }
 
 export function save() {
+  // Stamp each crop with where it physically sits, so it can be put back on the
+  // same bed even if the garden's layout changes in a later version.
+  const cells = plotLayout();
+  state.plots.forEach((p, i) => { if (p && cells[i]) { p.x = cells[i].x; p.z = cells[i].z; } });
+  state.layout = LAYOUT_ID;
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (err) { /* storage full or blocked */ }
 }
 

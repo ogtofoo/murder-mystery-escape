@@ -128,7 +128,11 @@ browser's `localStorage`, and crops keep growing while the tab is closed.
 to the files, so `git pull`-ing a new version — or deleting and re-cloning the folder — leaves
 it untouched, as long as you keep serving on the same address (`http://localhost:8777`).
 Saves are also version-tolerant: a save from an older build loads into a newer one, filling in
-whatever is new and quietly dropping anything that no longer exists.
+whatever is new and quietly dropping anything that no longer exists. Every crop is stored with
+the bed it's planted in *and* that bed's world coordinates, along with how far through its
+current cycle it is and how many pickings it has left — so plants come back exactly where you
+put them, mid-growth. If the garden's shape ever changes between versions, each crop is
+replanted on the bed nearest to where it physically stood rather than by slot number.
 
 You *would* lose it by switching port or hostname (`localhost:8000`, or `127.0.0.1` instead of
 `localhost` — different origin, different save), clearing browser data, playing in a private

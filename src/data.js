@@ -86,6 +86,24 @@ export const GRID_SIZE = 6;
 export const PLOT_COUNT = GRID_SIZE * GRID_SIZE;
 export const PLOT_SPACING = 2.6;
 
+/** Plot slots ordered so the ones you unlock first sit next to each other. */
+export function plotLayout() {
+  const cells = [];
+  const half = (GRID_SIZE - 1) / 2;
+  for (let x = 0; x < GRID_SIZE; x++) {
+    for (let z = 0; z < GRID_SIZE; z++) {
+      const px = (x - half) * PLOT_SPACING;
+      const pz = (z - half) * PLOT_SPACING;
+      cells.push({ x: px, z: pz, d: Math.hypot(px, pz), a: Math.atan2(pz, px) });
+    }
+  }
+  cells.sort((p, q) => (p.d - q.d) || (p.a - q.a));
+  return cells.slice(0, PLOT_COUNT);
+}
+
+/** Identifies the garden's shape, so a save made under a different one can be remapped. */
+export const LAYOUT_ID = `${GRID_SIZE}x${GRID_SIZE}@${PLOT_SPACING}`;
+
 /** Cost of the next plot when you already own `owned` of them. */
 export function plotCost(owned) {
   return Math.floor(8 * Math.pow(2.45, owned - 1));
