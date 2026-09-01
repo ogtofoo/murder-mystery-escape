@@ -1,1 +1,72 @@
-# murder-mystery-escape
+# Sheckle Garden 🥕
+
+A 3D gardening game. You start with **one sheckle**, buy **one carrot seed**, and grow that
+into a farm of prismatic, transcendent and SUPER crops. Runs in the browser — no build step,
+no dependencies to install (three.js is vendored in `vendor/`).
+
+## Play
+
+Any static web server works, because ES modules can't be loaded from `file://`:
+
+```bash
+python3 -m http.server 8777
+# then open http://localhost:8777
+```
+
+## Controls
+
+| Key | Action |
+| --- | --- |
+| `W` `A` `S` `D` | Move |
+| Mouse | Look (click the page to capture the pointer; click-drag also works) |
+| Wheel | Zoom the third-person camera |
+| `Shift` / `Space` | Sprint / jump |
+| `E` or left click | Plant, harvest, till a new plot, open the shop at the stall |
+| `1`–`9` / `Q` | Pick a seed from the hotbar |
+| `B` | Seed shop (seeds, packs, almanac) |
+| `V` | Toggle **first person ↔ third person** |
+| `Esc` | Close the shop / back to the menu |
+
+## How it plays
+
+1. You spawn with **₪1**. Press `B` and buy the carrot seed — it costs exactly one sheckle.
+2. Walk onto your single tilled plot, look down at it and press `E` to plant.
+3. Wait for it to grow (crops scale up as they ripen and bob once they're ready), then `E` to
+   harvest. The crop is sold on the spot.
+4. Look at the fenced-off ground next to your garden: the price tag floating over it is the
+   cost of the next plot. Press `E` to buy the land. Every plot costs ~2.45× the last, up to
+   36 plots.
+5. Reinvest in better seeds — or gamble on **seed packs**, which are deliberately brutal in
+   price and are the only way to discover rare seeds and above.
+
+### Tiers
+
+Common → Uncommon → Rare → Legendary → Mythic → Prismatic → Transcendent → **SUPER**
+
+Common seeds are always on the shelf. Everything from Rare up has to be pulled out of a seed
+pack first; once a species is discovered it stays in the shop (and the almanac) so you can buy
+it directly. Prismatic and above hue-cycle and glow in the world.
+
+Progress (money, seeds, plots, growing crops and the almanac) saves to `localStorage`, and
+crops keep growing while the tab is closed. "Erase save & start over" is on the title menu.
+
+## Layout
+
+```
+index.html        markup, HUD, shop and menu overlays
+styles.css        UI styling
+vendor/           three.js r169 (MIT), vendored so the game runs offline
+src/
+  main.js         loop, targeting, interaction, economy glue
+  data.js         tiers, the 24 plants, seed packs, land pricing, number formatting
+  state.js        save file, money, inventory, growth timers
+  world.js        sky, lights, ground, plot grid, shop stall, scenery
+  plants.js       procedural low-poly crop models (root/leaf/bush/vine/flower/tree/orb)
+  gardener.js     the 3D gardener and their walk cycle
+  player.js       movement, mouse look, first/third person camera
+  ui.js           HUD, hotbar, shop tabs, pack reveals, toasts
+  sfx.js          small WebAudio blips
+```
+
+Balance lives entirely in `src/data.js` — seed costs, grow times, sell prices, pack odds and
+the `plotCost()` curve. `window.game` is exposed in the console for poking at things.

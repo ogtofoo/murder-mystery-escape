@@ -1,0 +1,94 @@
+// Game data: tiers, plants, seed packs, land pricing.
+
+export const TIERS = {
+  common:       { id:'common',       name:'Common',       color:0x9ccc65, css:'#9ccc65', order:0, shine:0 },
+  uncommon:     { id:'uncommon',     name:'Uncommon',     color:0x4dd0e1, css:'#4dd0e1', order:1, shine:0 },
+  rare:         { id:'rare',         name:'Rare',         color:0x5c8bff, css:'#5c8bff', order:2, shine:0.15 },
+  legendary:    { id:'legendary',    name:'Legendary',    color:0xffb300, css:'#ffb300', order:3, shine:0.35 },
+  mythic:       { id:'mythic',       name:'Mythic',       color:0xb455f6, css:'#b455f6', order:4, shine:0.55 },
+  prismatic:    { id:'prismatic',    name:'Prismatic',    color:0xff4fd8, css:'#ff4fd8', order:5, shine:0.8, rainbow:true },
+  transcendent: { id:'transcendent', name:'Transcendent', color:0x00e5ff, css:'#00e5ff', order:6, shine:1.0, rainbow:true },
+  super:        { id:'super',        name:'SUPER',        color:0xffffff, css:'#fff1a8', order:7, shine:1.4, rainbow:true },
+};
+
+export const TIER_ORDER = Object.values(TIERS).sort((a,b)=>a.order-b.order).map(t=>t.id);
+
+// kind drives the 3D model: root | leaf | bush | vine | flower | tree | orb
+export const PLANTS = [
+  // ---- Common ----
+  { id:'carrot',   name:'Carrot',        tier:'common', kind:'root',  cost:1,     grow:8,   sell:4,     colors:[0xff8f3f,0x66bb6a] },
+  { id:'radish',   name:'Radish',        tier:'common', kind:'root',  cost:4,     grow:12,  sell:12,    colors:[0xe8517a,0x7cb342] },
+  { id:'lettuce',  name:'Lettuce',       tier:'common', kind:'leaf',  cost:12,    grow:16,  sell:34,    colors:[0x8bc34a,0xaed581] },
+  // ---- Uncommon ----
+  { id:'tomato',   name:'Tomato',        tier:'uncommon', kind:'bush', cost:60,   grow:22,  sell:180,   colors:[0xe53935,0x4caf50] },
+  { id:'blueberry',name:'Blueberry',     tier:'uncommon', kind:'bush', cost:220,  grow:28,  sell:680,   colors:[0x3f51b5,0x43a047] },
+  { id:'pepper',   name:'Fire Pepper',   tier:'uncommon', kind:'bush', cost:800,  grow:34,  sell:2500,  colors:[0xff5722,0x2e7d32] },
+  // ---- Rare ----
+  { id:'melon',    name:'Watermelon',    tier:'rare', kind:'vine',  cost:3200,   grow:45,  sell:11000,  colors:[0x2e7d32,0x66bb6a] },
+  { id:'pumpkin',  name:'Pumpkin',       tier:'rare', kind:'vine',  cost:12000,  grow:55,  sell:44000,  colors:[0xef6c00,0x558b2f] },
+  { id:'dragon',   name:'Dragonfruit',   tier:'rare', kind:'flower',cost:45000,  grow:70,  sell:175000, colors:[0xff2d78,0x76ff03] },
+  // ---- Legendary ----
+  { id:'goldapple',name:'Golden Apple',  tier:'legendary', kind:'tree', cost:180000,   grow:90,  sell:760000,   colors:[0xffd54f,0x4e342e] },
+  { id:'starcorn', name:'Star Corn',     tier:'legendary', kind:'leaf', cost:700000,   grow:110, sell:3100000,  colors:[0xfff176,0x9ccc65] },
+  { id:'moonflower',name:'Moonflower',   tier:'legendary', kind:'flower',cost:2600000, grow:130, sell:12000000, colors:[0xe1f5fe,0x80cbc4] },
+  // ---- Mythic ----
+  { id:'voidmelon',name:'Void Melon',    tier:'mythic', kind:'vine', cost:11000000,  grow:150, sell:52000000,  colors:[0x311b92,0x7c4dff] },
+  { id:'phoenix',  name:'Phoenix Pepper',tier:'mythic', kind:'bush', cost:45000000,  grow:175, sell:220000000, colors:[0xff6d00,0xffd600] },
+  { id:'lotus',    name:'Celestial Lotus',tier:'mythic',kind:'flower',cost:190000000, grow:200, sell:950000000, colors:[0xf8bbd0,0xb39ddb] },
+  // ---- Prismatic ----
+  { id:'prismrose',name:'Prism Rose',    tier:'prismatic', kind:'flower', cost:8e8,  grow:220, sell:4.2e9,  colors:[0xff4fd8,0x69f0ae] },
+  { id:'auroravine',name:'Aurora Vine',  tier:'prismatic', kind:'vine',   cost:3.4e9,grow:240, sell:1.8e10, colors:[0x00e676,0x18ffff] },
+  { id:'spectralfig',name:'Spectral Fig',tier:'prismatic', kind:'tree',   cost:1.4e10,grow:260,sell:7.6e10, colors:[0xba68c8,0x4dd0e1] },
+  // ---- Transcendent ----
+  { id:'eternityroot',name:'Eternity Root', tier:'transcendent', kind:'root', cost:6e10, grow:280, sell:3.2e11, colors:[0x00e5ff,0x1de9b6] },
+  { id:'novabloom', name:'Nova Bloom',   tier:'transcendent', kind:'flower', cost:2.6e11,grow:300, sell:1.4e12, colors:[0xffffff,0x40c4ff] },
+  { id:'chronofruit',name:'Chrono Fruit',tier:'transcendent', kind:'orb',    cost:1.1e12,grow:320, sell:6e12,   colors:[0x64ffda,0x536dfe] },
+  // ---- Super ----
+  { id:'sheckletree',name:'Sheckle Tree',tier:'super', kind:'tree', cost:5e12, grow:340, sell:2.8e13, colors:[0xffe082,0x8d6e63] },
+  { id:'infinitygourd',name:'Infinity Gourd',tier:'super', kind:'vine', cost:2.2e13,grow:380, sell:1.3e14, colors:[0xfff59d,0xff8a80] },
+  { id:'superfruit', name:'SUPERFRUIT',  tier:'super', kind:'orb',  cost:1e14, grow:420, sell:6.5e14, colors:[0xffffff,0xffd54f] },
+];
+
+export const PLANTS_BY_ID = Object.fromEntries(PLANTS.map(p => [p.id, p]));
+
+export const PACKS = [
+  { id:'sprout',   name:'Sprout Pack',    cost:900,   seeds:3, weights:{ common:55, uncommon:33, rare:11, legendary:1 } },
+  { id:'garden',   name:'Garden Pack',    cost:90000, seeds:3, weights:{ uncommon:44, rare:40, legendary:14, mythic:2 } },
+  { id:'exotic',   name:'Exotic Pack',    cost:9e6,   seeds:3, weights:{ rare:38, legendary:41, mythic:18, prismatic:3 } },
+  { id:'celestial',name:'Celestial Pack', cost:9e8,   seeds:3, weights:{ legendary:32, mythic:42, prismatic:21, transcendent:5 } },
+  { id:'prism',    name:'Prismatic Pack', cost:9e10,  seeds:4, weights:{ mythic:28, prismatic:46, transcendent:22, super:4 } },
+  { id:'super',    name:'SUPER Pack',     cost:9e12,  seeds:4, weights:{ prismatic:22, transcendent:46, super:32 } },
+];
+
+// Garden is a GRID_SIZE x GRID_SIZE field of plots; you start owning one.
+export const GRID_SIZE = 6;
+export const PLOT_COUNT = GRID_SIZE * GRID_SIZE;
+export const PLOT_SPACING = 2.6;
+
+/** Cost of the next plot when you already own `owned` of them. */
+export function plotCost(owned) {
+  return Math.floor(8 * Math.pow(2.45, owned - 1));
+}
+
+const UNITS = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
+
+/** 1234567 -> "1.23M" */
+export function fmt(n) {
+  if (!isFinite(n)) return '∞';
+  if (n < 1000) return (Math.round(n * 100) / 100).toLocaleString('en-US');
+  let u = 0;
+  while (n >= 1000 && u < UNITS.length - 1) { n /= 1000; u++; }
+  const s = n < 10 ? n.toFixed(2) : n < 100 ? n.toFixed(1) : n.toFixed(0);
+  return s.replace(/\.0+$/, '') + UNITS[u];
+}
+
+/** Pick a plant id from a pack's tier weights. */
+export function rollSeed(weights) {
+  const entries = Object.entries(weights);
+  const total = entries.reduce((a, [, w]) => a + w, 0);
+  let r = Math.random() * total;
+  let tier = entries[0][0];
+  for (const [t, w] of entries) { r -= w; if (r <= 0) { tier = t; break; } }
+  const pool = PLANTS.filter(p => p.tier === tier);
+  return pool[Math.floor(Math.random() * pool.length)].id;
+}

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Sheckle Garden — a 3D gardening game</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥕</text></svg>" />
+<link rel="stylesheet" href="./styles.css" />
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div id="topleft">
+    <div id="wallet"><span class="coin">₪</span><span id="money">1</span> <span class="unit">sheckles</span></div>
+    <div id="plotline"><span id="plotcount">1</span> / 36 plots tilled</div>
+  </div>
+  <div id="crosshair"></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="toasts"></div>
+  <div id="hotbar"></div>
+  <div id="hint">B shop &nbsp;·&nbsp; V view &nbsp;·&nbsp; E use &nbsp;·&nbsp; Esc menu</div>
+</div>
+
+<div id="shop" class="panel hidden">
+  <header>
+    <h2>Seed Shop</h2>
+    <div class="tabs">
+      <button class="tab active" data-tab="seeds">Seeds</button>
+      <button class="tab" data-tab="packs">Seed Packs</button>
+      <button class="tab" data-tab="almanac">Almanac</button>
+    </div>
+    <button class="close" data-close-shop>✕</button>
+  </header>
+  <div id="shopbody"></div>
+  <footer>Wallet: <b class="coin">₪</b> <b id="shopmoney">1</b> &nbsp;·&nbsp; press <kbd>B</kbd> or <kbd>Esc</kbd> to close</footer>
+</div>
+
+<div id="packmodal" class="hidden">
+  <div class="packbox">
+    <h3 id="packtitle">Sprout Pack</h3>
+    <div id="packcards"></div>
+    <button id="packok">Nice!</button>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="menu">
+    <h1>Sheckle <span>Garden</span></h1>
+    <p class="tag">One sheckle. One carrot. Grow it into an empire.</p>
+    <div class="controls">
+      <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move</div>
+      <div><kbd>Shift</kbd> sprint &nbsp; <kbd>Space</kbd> jump</div>
+      <div><kbd>Mouse</kbd> look &nbsp; <kbd>Wheel</kbd> zoom</div>
+      <div><kbd>E</kbd> plant / harvest / buy plot</div>
+      <div><kbd>1</kbd>–<kbd>9</kbd> pick seed &nbsp; <kbd>B</kbd> shop</div>
+      <div><kbd>V</kbd> first &harr; third person</div>
+    </div>
+    <button id="playbtn">Click to play</button>
+    <button id="resetbtn" class="ghost">Erase save &amp; start over</button>
+  </div>
+</div>
+
+<div id="loading">Planting the world…</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
