@@ -72,6 +72,44 @@ for (const p of PLANTS) {
 
 export const PLANTS_BY_ID = Object.fromEntries(PLANTS.map(p => [p.id, p]));
 
+/**
+ * Watering cans: a manual shot of growth. Using one skips the plot ahead by
+ * `boost` of its current cycle, once per cycle. The super can does a whole
+ * area at once.
+ */
+export const CANS = [
+  { id:'can_common', name:'Watering Can',       tier:'common', cost:300,  boost:0.25, radius:0 },
+  { id:'can_super',  name:'SUPER Watering Can', tier:'super',  cost:5e10, boost:0.60, radius:6.5 },
+];
+export const CANS_BY_ID = Object.fromEntries(CANS.map(c => [c.id, c]));
+
+/**
+ * Sprinklers sit on a tilled plot (costing you that square) and permanently
+ * speed up every crop within `radius` world units by `speed`x. Overlapping
+ * sprinklers don't stack — the best one covering a plot wins.
+ */
+export const SPRINKLERS = [
+  { id:'spr_common',       name:'Common Sprinkler',       tier:'common',       cost:12000, radius:2.7,  speed:1.35 },
+  { id:'spr_rare',         name:'Rare Sprinkler',         tier:'rare',         cost:1.5e6, radius:3.9,  speed:1.70 },
+  { id:'spr_legendary',    name:'Legendary Sprinkler',    tier:'legendary',    cost:2.5e8, radius:5.5,  speed:2.20 },
+  { id:'spr_prismatic',    name:'Prismatic Sprinkler',    tier:'prismatic',    cost:1.2e11,radius:7.5,  speed:2.90 },
+  { id:'spr_transcendent', name:'Transcendent Sprinkler', tier:'transcendent', cost:9e12,  radius:10.5, speed:3.80 },
+  { id:'spr_super',        name:'SUPER Sprinkler',        tier:'super',        cost:4e14,  radius:999,  speed:5.00 },
+];
+export const SPRINKLERS_BY_ID = Object.fromEntries(SPRINKLERS.map(s => [s.id, s]));
+
+/** How many plots a sprinkler of this reach actually covers, for the shop copy. */
+export function sprinklerCoverage(radius) {
+  const cells = plotLayout();
+  let most = 0;
+  for (const from of cells) {
+    let n = 0;
+    for (const to of cells) if (Math.hypot(from.x - to.x, from.z - to.z) <= radius + 1e-6) n++;
+    most = Math.max(most, n);
+  }
+  return most;
+}
+
 export const PACKS = [
   { id:'sprout',   name:'Sprout Pack',    cost:900,   seeds:3, weights:{ common:55, uncommon:33, rare:11, legendary:1 } },
   { id:'garden',   name:'Garden Pack',    cost:90000, seeds:3, weights:{ uncommon:44, rare:40, legendary:14, mythic:2 } },

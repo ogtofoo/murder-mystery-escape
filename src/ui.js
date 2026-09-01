@@ -1,7 +1,8 @@
 // All DOM overlay logic: wallet, hotbar, shop, pack reveals, toasts, menu.
 
-import { PLANTS, PLANTS_BY_ID, PACKS, TIERS, TIER_ORDER, PLOT_COUNT, fmt, refundValue, SEED_REFUND } from './data.js';
-import { state, seedCount } from './state.js';
+import { PLANTS, PLANTS_BY_ID, PACKS, TIERS, TIER_ORDER, PLOT_COUNT, fmt, refundValue, SEED_REFUND,
+         CANS, SPRINKLERS, SPRINKLERS_BY_ID, sprinklerCoverage } from './data.js';
+import { state, seedCount, stockCount } from './state.js';
 
 const $ = sel => document.querySelector(sel);
 
@@ -12,6 +13,7 @@ export class UI {
     this.shopOpen = false;
     this.tab = 'seeds';
     this.shovelOut = false;
+    this.canOut = false;
     this.padActive = false;   // draws a focus ring once a controller is in use
     this.focusIndex = 0;
 
@@ -46,6 +48,7 @@ export class UI {
     this.el.hotbar.addEventListener('click', e => {
       const slot = e.target.closest('.slot');
       if (slot?.dataset.tool === 'shovel') this.hooks.toggleShovel();
+      else if (slot?.dataset.tool === 'can') this.hooks.toggleCan();
       else if (slot?.dataset.plant) this.select(slot.dataset.plant);
     });
   }
@@ -65,13 +68,23 @@ export class UI {
   }
 
   hotbarSeeds() {
-    return Object.keys(state.seeds)
+    const seeds = Object.keys(state.seeds)
       .filter(id => PLANTS_BY_ID[id] && seedCount(id) > 0)
       .sort((a, b) => {
         const pa = PLANTS_BY_ID[a], pb = PLANTS_BY_ID[b];
         return TIERS[pa.tier].order - TIERS[pb.tier].order || pa.cost - pb.cost;
-      })
-      .slice(0, 9);
+      });
+    const sprinklers = SPRINKLERS.filter(s => stockCount(s.id) > 0).map(s => s.id);
+    return [...seeds, ...sprinklers].slice(0, 9);
+  }
+
+  /** Seeds and sprinklers both live in the hotbar. */
+  itemInfo(id) {
+    const p = PLANTS_BY_ID[id];
+    if (p) return { name: p.name, tier: p.tier, count: seedCount(id), sprinkler: false };
+    const s = SPRINKLERS_BY_ID[id];
+    if (s) return { name: s.name.replace(' Sprinkler', ''), tier: s.tier, count: stockCount(id), sprinkler: true };
+    return null;
   }
 
   setShovel(on) {
@@ -79,12 +92,18 @@ export class UI {
     this.renderHotbar();
   }
 
+  setCan(on) {
+    this.canOut = on;
+    this.renderHotbar();
+  }
+
   toolSlot() {
+    const can = CANS.filter(c => state.cans[c.id]).pop();
     return `<div class="slot tool ${this.shovelOut ? 'active' : ''}" data-tool="shovel">
-      <div class="glyph">⛏</div>
-      <div class="nm">Shovel</div>
-      <div class="key">G</div>
-    </div>`;
+        <div class="glyph">⛏</div><div class="nm">Shovel</div><div class="key">G</div>
+      </div>` + (can ? `<div class="slot tool ${this.canOut ? 'active' : ''}" data-tool="can">
+        <div class="glyph">💧</div><div class="nm">${can.id === 'can_super' ? 'SUPER Can' : 'Can'}</div><div class="key">F</div>
+      </div>` : '');
   }
 
   renderHotbar() {
@@ -96,18 +115,18 @@ export class UI {
       return;
     }
     this.el.hotbar.innerHTML = ids.map((id, i) => {
-      const p = PLANTS_BY_ID[id];
-      return `<div class="slot ${id === this.selected ? 'active' : ''}" data-plant="${id}">
-        <div class="dot" style="background:${TIERS[p.tier].css}"></div>
-        <div class="nm">${p.name}</div>
-        <div class="ct">×${seedCount(id)}</div>
+      const it = this.itemInfo(id);
+      return `<div class="slot ${id === this.selected ? 'active' : ''} ${it.sprinkler ? 'device' : ''}" data-plant="${id}">
+        <div class="dot" style="background:${TIERS[it.tier].css}">${it.sprinkler ? '<span>✳</span>' : ''}</div>
+        <div class="nm">${it.name}</div>
+        <div class="ct">×${it.count}</div>
         <div class="key">${i + 1}</div>
       </div>`;
     }).join('') + this.toolSlot();
   }
 
   select(id) {
-    if (seedCount(id) > 0) { this.selected = id; this.renderHotbar(); }
+    if (seedCount(id) > 0 || stockCount(id) > 0) { this.selected = id; this.renderHotbar(); }
   }
 
   selectIndex(i) {
@@ -149,6 +168,7 @@ export class UI {
     this.el.shopmoney.textContent = fmt(state.money);
     if (this.tab === 'seeds') this.renderSeeds();
     else if (this.tab === 'packs') this.renderPacks();
+    else if (this.tab === 'tools') this.renderTools();
     else this.renderAlmanac();
     this.applyFocus();
   }
@@ -252,6 +272,47 @@ export class UI {
     this.el.body.innerHTML = html;
     for (const b of this.el.body.querySelectorAll('[data-pack]')) {
       b.addEventListener('click', () => this.hooks.buyPack(b.dataset.pack));
+    }
+  }
+
+  renderTools() {
+    let html = `<div class="tierhead">Watering cans — a shot of growth on demand, once per plant per cycle</div>`;
+    for (const c of CANS) {
+      const owned = !!state.cans[c.id];
+      html += `<div class="row">
+        <div class="stripe" style="background:${TIERS[c.tier].css}"></div>
+        <div>
+          <div class="name">${c.name}</div>
+          <div class="meta">skips a plant <b>${Math.round(c.boost * 100)}%</b> further through its cycle ·
+            ${c.radius ? `waters everything within ${c.radius}m at once` : 'one plot at a time'}</div>
+        </div>
+        <div class="own">${owned ? 'owned' : ''}</div>
+        <button class="buy" data-can="${c.id}" ${owned || state.money < c.cost ? 'disabled' : ''}>
+          ${owned ? '✓ owned' : '₪ ' + fmt(c.cost)}</button>
+      </div>`;
+    }
+    html += `<div class="tierhead">Sprinklers — stand one on a plot and everything in range grows faster, forever</div>`;
+    for (const s of SPRINKLERS) {
+      const have = stockCount(s.id);
+      const placed = state.sprinklers.filter(x => x === s.id).length;
+      html += `<div class="row">
+        <div class="stripe" style="background:${TIERS[s.tier].css}"></div>
+        <div>
+          <div class="name" style="color:${TIERS[s.tier].css}">${s.name}</div>
+          <div class="meta"><b>${s.speed}× growth</b> ·
+            ${s.radius > 100 ? 'covers the entire garden' : `reaches ${s.radius}m — up to ${sprinklerCoverage(s.radius)} plots`} ·
+            takes up the plot it stands on</div>
+        </div>
+        <div class="own">${have ? `in shed<br><b>${have}</b>` : ''}${placed ? `<br>${placed} placed` : ''}</div>
+        <button class="buy" data-sprinkler="${s.id}" ${state.money < s.cost ? 'disabled' : ''}>₪ ${fmt(s.cost)}</button>
+      </div>`;
+    }
+    this.el.body.innerHTML = html;
+    for (const b of this.el.body.querySelectorAll('[data-can]')) {
+      b.addEventListener('click', () => this.hooks.buyCan(b.dataset.can));
+    }
+    for (const b of this.el.body.querySelectorAll('[data-sprinkler]')) {
+      b.addEventListener('click', () => this.hooks.buySprinkler(b.dataset.sprinkler));
     }
   }
 

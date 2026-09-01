@@ -1,11 +1,14 @@
 // Sheckle Garden — entry point: loop, interaction, economy glue.
 
 import * as THREE from 'three';
-import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollPack, plotCost, PLOT_COUNT, refundValue, SEED_REFUND } from './data.js';
+import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollPack, plotCost, PLOT_COUNT, refundValue, SEED_REFUND,
+         CANS_BY_ID, SPRINKLERS_BY_ID, plotLayout } from './data.js';
 import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount,
-         growth, isRipe, isRegrowing, harvestsLeft, cycleSeconds } from './state.js';
+         growth, isRipe, isRegrowing, harvestsLeft, cycleSeconds,
+         refreshSprinklers, plotSpeed, sprinklerAt, stockCount, addSprinkler, takeSprinkler, bestCan } from './state.js';
 import { buildWorld } from './world.js';
 import { buildPlant, animatePlant } from './plants.js';
+import { buildSprinkler, animateSprinkler, buildCan, waterBurst } from './devices.js';
 import { Player } from './player.js';
 import { UI } from './ui.js';
 import { sfx } from './sfx.js';
@@ -43,6 +46,9 @@ const ui = new UI({
     ui.toast('Backup restored — welcome back.', 'gold');
   },
   toggleShovel: () => toggleShovel(),
+  toggleCan: () => toggleCan(),
+  buyCan: id => buyCan(id),
+  buySprinkler: id => buySprinkler(id),
   buySeed: id => buySeed(id),
   sellSeed: (id, all) => sellSeed(id, all),
   buyPack: id => buyPack(id),
@@ -96,6 +102,29 @@ function sellSeed(id, all = false) {
   save();
 }
 
+function buyCan(id) {
+  const can = CANS_BY_ID[id];
+  if (!can || state.cans[id]) return;
+  if (!spend(can.cost)) { ui.toast('Not enough sheckles.', 'bad'); sfx.deny(); return; }
+  state.cans[id] = true;
+  ui.toast(`Bought the ${can.name} — press <b>F</b> to use it`, 'gold');
+  sfx.buy();
+  ui.refresh();
+  save();
+}
+
+function buySprinkler(id) {
+  const spr = SPRINKLERS_BY_ID[id];
+  if (!spr) return;
+  if (!spend(spr.cost)) { ui.toast('Not enough sheckles.', 'bad'); sfx.deny(); return; }
+  addSprinkler(id, 1);
+  ui.select(id);
+  ui.toast(`Bought a ${spr.name} — place it on an empty plot`, 'gold');
+  sfx.buy();
+  ui.refresh();
+  save();
+}
+
 function buyPack(packId) {
   const pack = PACKS.find(p => p.id === packId);
   if (!pack) return;
@@ -137,7 +166,7 @@ function plant(index) {
   if (!id || seedCount(id) <= 0) { ui.toast('No seed selected. Buy one in the shop (B).', 'bad'); sfx.deny(); return; }
   if (state.plots[index]) return;
   takeSeed(id);
-  state.plots[index] = { plantId: id, plantedAt: Date.now(), taken: 0 };
+  state.plots[index] = { plantId: id, plantedAt: Date.now(), taken: 0, watered: false };
   syncPlot(index);
   const planted = PLANTS_BY_ID[id];
   ui.toast(`Planted ${planted.name}${planted.harvests > 1 ? ` — good for ${planted.harvests} harvests` : ''}`);
@@ -146,9 +175,68 @@ function plant(index) {
   save();
 }
 
+function placeSprinkler(index) {
+  const id = ui.selected;
+  const spr = SPRINKLERS_BY_ID[id];
+  if (!spr || stockCount(id) <= 0) return;
+  if (state.plots[index] || state.sprinklers[index]) return;
+  takeSprinkler(id);
+  state.sprinklers[index] = id;
+  refreshSprinklers();
+  syncAllPlots();
+  ui.toast(`Placed a ${spr.name} — ${spr.speed}× growth in range`, 'gold');
+  sfx.buy();
+  ui.refresh();
+  save();
+}
+
+function removeSprinkler(index) {
+  const id = state.sprinklers[index];
+  const spr = SPRINKLERS_BY_ID[id];
+  if (!spr) return;
+  state.sprinklers[index] = null;
+  addSprinkler(id, 1);          // it goes back in the shed, not the bin
+  refreshSprinklers();
+  syncAllPlots();
+  burst(world.plots[index], 0x8fd8ff);
+  ui.toast(`Picked up the ${spr.name}`);
+  sfx.dig();
+  ui.refresh();
+  save();
+}
+
+/** Water a plot (and its neighbours, with the super can): skip growth ahead. */
+function waterPlot(index) {
+  const can = bestCan();
+  if (!can) return;
+  const cells = plotLayout();
+  const targets = can.radius > 0
+    ? cells.map((c, i) => i).filter(i => Math.hypot(cells[i].x - cells[index].x, cells[i].z - cells[index].z) <= can.radius)
+    : [index];
+
+  let done = 0;
+  for (const i of targets) {
+    const plot = state.plots[i];
+    if (!plot || plot.watered || isRipe(plot, i)) continue;
+    plot.plantedAt -= can.boost * cycleSeconds(plot, i) * 1000;
+    plot.watered = true;        // one watering per growth cycle
+    done++;
+  }
+
+  waterBurst(scene, world.plots[index].x, world.plots[index].z, can.radius || 1, effects);
+  sfx.water();
+  gamepad.rumble(0.2, 90);
+  if (done) {
+    ui.toast(`Watered ${done} plant${done === 1 ? '' : 's'} <span style="opacity:.7">· +${Math.round(can.boost * 100)}% growth</span>`);
+  } else {
+    ui.toast('Nothing here needs water right now.');
+  }
+  save();
+}
+
 function harvest(index) {
   const plot = state.plots[index];
-  if (!plot || !isRipe(plot)) return;
+  if (!plot || !isRipe(plot, index)) return;
   const p = PLANTS_BY_ID[plot.plantId];
   earn(p.sell);
   state.stats.harvested++;
@@ -157,7 +245,7 @@ function harvest(index) {
   plot.taken = (plot.taken || 0) + 1;
   const left = p.harvests - plot.taken;
   if (left <= 0) state.plots[index] = null;
-  else plot.plantedAt = Date.now();
+  else { plot.plantedAt = Date.now(); plot.watered = false; }
 
   burst(world.plots[index], TIERS[p.tier].color);
   syncPlot(index);
@@ -172,6 +260,7 @@ function harvest(index) {
 }
 
 function digUp(index) {
+  if (state.sprinklers[index]) { removeSprinkler(index); return; }
   const plot = state.plots[index];
   if (!plot) return;
   const p = PLANTS_BY_ID[plot.plantId];
@@ -196,7 +285,8 @@ let digStart = 0;
 let digProgress = 0;
 
 function updateDigging(holding) {
-  const valid = player.shovel && target >= 0 && target < state.owned && state.plots[target];
+  const valid = player.shovel && target >= 0 && target < state.owned
+    && (state.plots[target] || state.sprinklers[target]);
   if (!valid || !holding || ui.modalOpen) {
     if (digProgress > 0.15 && valid && !holding) sfx.deny();   // let go too early
     digIndex = -1;
@@ -224,6 +314,20 @@ function syncPlot(i) {
   view.label.visible = i === state.owned;
   view.soil.visible = owned;
   view.rim.visible = owned;
+
+  // Sprinkler standing on this plot.
+  const sprId = owned ? state.sprinklers[i] : null;
+  if (view.sprinkler && view.sprinkler.userData.spec.id !== sprId) {
+    view.cropAnchor.remove(view.sprinkler);
+    view.sprinkler = null;
+  }
+  if (sprId && !view.sprinkler) {
+    const m = buildSprinkler(SPRINKLERS_BY_ID[sprId]);
+    view.cropAnchor.add(m);
+    view.sprinkler = m;
+  }
+  // Watered ground reads darker.
+  view.soil.material = owned && plotSpeed(i) > 1 ? wetSoilMat : world.soilMat;
 
   const data = state.plots[i];
   const wantId = owned && data ? data.plantId : null;
@@ -255,6 +359,10 @@ function syncAllPlots(force = false) {
 function disposeTree(obj) {
   obj.traverse(o => { if (o.isMesh) o.material?.dispose?.(); });
 }
+
+const wetSoilMat = world.soilMat.clone();
+wetSoilMat.color.setHex(0x7a5a3f);
+wetSoilMat.roughness = 0.6;
 
 // Harvest confetti.
 const effects = [];
@@ -339,27 +447,49 @@ function updatePrompt() {
         <span class="digbar"><i style="width:${pct}%"></i></span>`);
       return;
     }
+    if (!plot && state.sprinklers[i]) {
+      const spr = SPRINKLERS_BY_ID[state.sprinklers[i]];
+      ui.setPrompt(`${spr.name} <span class="sub" style="color:${TIERS[spr.tier].css}">${spr.speed}× growth in range · G + hold E to pick up</span>`);
+      return;
+    }
     if (!plot) {
+      const spr = SPRINKLERS_BY_ID[ui.selected];
+      if (spr) {
+        ui.setPrompt(`<b>[E]</b> Place ${spr.name}
+          <span class="sub">${spr.speed}× growth within ${spr.radius > 100 ? 'the whole garden' : spr.radius.toFixed(1) + 'm'} · uses up this plot</span>`);
+        return;
+      }
       const sel = ui.selected ? PLANTS_BY_ID[ui.selected] : null;
       ui.setPrompt(sel
         ? `<b>[E]</b> Plant ${sel.name} <span class="sub">${seedCount(sel.id)} seed${seedCount(sel.id) === 1 ? '' : 's'} left · 1–9 to switch</span>`
         : `Empty plot <span class="sub">No seeds — press B to visit the shop</span>`);
       return;
     }
+    if (player.can) {
+      const can = bestCan();
+      const p = PLANTS_BY_ID[plot.plantId];
+      const already = plot.watered || isRipe(plot, i);
+      ui.setPrompt(already
+        ? `${p.name} <span class="sub">${isRipe(plot, i) ? 'ready to harvest — put the can away (F)' : 'already watered this cycle'}</span>`
+        : `<b>[E]</b> Water ${p.name} <span class="sub">+${Math.round(can.boost * 100)}% growth${can.radius ? ' to everything nearby' : ''}</span>`);
+      return;
+    }
     const p = PLANTS_BY_ID[plot.plantId];
     const picks = harvestsLeft(plot);
-    if (isRipe(plot)) {
+    if (isRipe(plot, i)) {
       const after = picks - 1;
       const more = p.harvests === 1 ? '' :
         after > 0 ? ` · regrows ${after} more time${after === 1 ? '' : 's'}` : ' · last picking';
       ui.setPrompt(`<b>[E]</b> Harvest ${p.name} — <span class="coin">₪${fmt(p.sell)}</span>
         <span class="sub" style="color:${TIERS[p.tier].css}">${TIERS[p.tier].name}${more}</span>`);
     } else {
-      const wait = Math.ceil(cycleSeconds(plot) * (1 - growth(plot)));
+      const wait = Math.ceil(cycleSeconds(plot, i) * (1 - growth(plot, i)));
       const verb = isRegrowing(plot) ? 'regrowing' : 'grown';
       const tail = p.harvests === 1 ? '' : ` · ${picks} harvest${picks === 1 ? '' : 's'} left`;
-      ui.setPrompt(`${p.name} — ${Math.floor(growth(plot) * 100)}% ${verb}
-        <span class="sub">ready in ${wait}s${tail}</span>`);
+      const speed = plotSpeed(i);
+      const wet = speed > 1 ? ` · <span style="color:#8fd8ff">${speed}× sprinkler</span>` : '';
+      ui.setPrompt(`${p.name} — ${Math.floor(growth(plot, i) * 100)}% ${verb}
+        <span class="sub">ready in ${wait}s${tail}${wet}</span>`);
     }
     return;
   }
@@ -376,9 +506,12 @@ function interact() {
     const i = target;
     if (i >= state.owned) { buyPlot(i); return; }
     const plot = state.plots[i];
-    if (player.shovel && plot) return;   // handled by hold-to-dig
+    if (player.shovel && (plot || state.sprinklers[i])) return;   // handled by hold-to-dig
+    if (player.can && plot) { waterPlot(i); return; }
+    if (!plot && state.sprinklers[i]) return;
+    if (!plot && SPRINKLERS_BY_ID[ui.selected]) { placeSprinkler(i); return; }
     if (!plot) plant(i);
-    else if (isRipe(plot)) harvest(i);
+    else if (isRipe(plot, i)) harvest(i);
     else ui.toast(`${PLANTS_BY_ID[plot.plantId].name} is still growing.`);
     return;
   }
@@ -405,6 +538,7 @@ window.addEventListener('keydown', e => {
     case 'KeyQ': ui.cycleSelection(-1); break;
     case 'KeyP': togglePadTest(); break;
     case 'KeyG': toggleShovel(); break;
+    case 'KeyF': toggleCan(); break;
     default:
       if (/^Digit[1-9]$/.test(e.code)) ui.selectIndex(Number(e.code.slice(5)) - 1);
   }
@@ -503,6 +637,7 @@ function updateGamepad(dt) {
   if (pressed.has(BTN.LB)) ui.cycleSelection(-1);
   if (pressed.has(BTN.RB)) ui.cycleSelection(1);
   if (pressed.has(BTN.DOWN)) toggleShovel();
+  if (pressed.has(BTN.UP)) toggleCan();
   if (pressed.has(BTN.R3)) { player.camDistance = player.camDistance > 4 ? 3.2 : 6.0; }
   if (pressed.has(BTN.START) || pressed.has(BTN.BACK)) { document.exitPointerLock?.(); ui.showMenu(true); }
 }
@@ -510,7 +645,18 @@ function updateGamepad(dt) {
 function toggleShovel(force) {
   const on = player.setShovel(force ?? !player.shovel);
   ui.setShovel(on);
+  if (on && player.can) { player.setCan(false); ui.setCan(false); }
   ui.toast(on ? 'Shovel out — hold E on a plant to dig it up' : 'Shovel away');
+  return on;
+}
+
+function toggleCan(force) {
+  const can = bestCan();
+  if (!can) { ui.toast('You do not own a watering can yet — check the shop (B).', 'bad'); sfx.deny(); return false; }
+  const on = player.setCan(force ?? !player.can, can);
+  ui.setCan(on);
+  if (on && player.shovel) toggleShovel(false);
+  ui.toast(on ? `${can.name} out — press E on a plant to water it` : 'Watering can away');
   return on;
 }
 
@@ -558,9 +704,10 @@ function tick() {
   let ripe = 0;
   for (let i = 0; i < PLOT_COUNT; i++) {
     const view = world.plots[i];
+    if (view.sprinkler) animateSprinkler(view.sprinkler, t, dt);
     if (!view.crop) continue;
     const data = state.plots[i];
-    const g = growth(data);
+    const g = growth(data, i);
     const done = g >= 1;
     if (done) ripe++;
     // First cycle grows from a sprout; regrowth keeps the established plant and
@@ -577,7 +724,8 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { build: BUILD_LABEL, toggleShovel, digUp, sellSeed, state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
+window.game = { build: BUILD_LABEL, toggleShovel, toggleCan, digUp, sellSeed, buyCan, buySprinkler, placeSprinkler,
+                waterPlot, refreshSprinklers, plotSpeed, state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
 
 syncAllPlots();
 ui.refresh();

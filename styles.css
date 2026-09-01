@@ -76,6 +76,8 @@ kbd {
 .slot.tool { width: 66px; border-style: dashed; }
 .slot.tool.active { border-style: solid; border-color: var(--gold); background: rgba(240,193,75,0.12); }
 .slot.tool .glyph { font-size: 20px; line-height: 1.1; }
+.slot.device .dot { width: 14px; height: 14px; display: grid; place-items: center; }
+.slot.device .dot span { font-size: 9px; color: #10180f; line-height: 1; }
 .digbar {
   display: block; height: 6px; margin-top: 7px; border-radius: 4px;
   background: rgba(255,255,255,0.15); overflow: hidden;

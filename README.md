@@ -103,6 +103,34 @@ cost, one at a time or the whole stack at once. Handy for dumping a stack of com
 seed pack upgrades you, or clawing back half of a seed you bought by mistake. Digging a crop
 up with the shovel refunds nothing — the seed is already in the ground.
 
+### Watering cans and sprinklers
+
+Two ways to make things grow faster, sold in the shop's **Tools** tab.
+
+**Watering cans** are manual. Press `F` to take one out, then `E` on a plant to skip it further
+through its current cycle — once per plant per cycle, so you can't spam it.
+
+| Can | Cost | Effect |
+| --- | --- | --- |
+| Watering Can | ₪300 | +25% growth, one plot at a time |
+| SUPER Watering Can | ₪50B | +60% growth, to every plant within 6.5m at once |
+
+**Sprinklers** are automatic and permanent. Buy one, select it in the hotbar and press `E` on an
+empty plot to stand it there — it costs you that square, and in exchange every crop in range
+grows faster forever. Overlapping sprinklers don't stack; the best one covering a plot wins.
+Soil under a sprinkler reads darker, and the growth prompt shows the multiplier.
+
+| Sprinkler | Cost | Growth | Reach |
+| --- | --- | --- | --- |
+| Common | ₪12K | 1.35× | 2.7m — up to 5 plots |
+| Rare | ₪1.5M | 1.7× | 3.9m — up to 9 plots |
+| Legendary | ₪250M | 2.2× | 5.5m — up to 13 plots |
+| Prismatic | ₪120B | 2.9× | 7.5m — up to 25 plots |
+| Transcendent | ₪9T | 3.8× | 10.5m — up to 35 plots |
+| SUPER | ₪400T | 5× | the entire garden |
+
+The shovel picks a sprinkler back up and returns it to your shed, so moving one costs nothing.
+
 ### The shovel
 
 Press `G` to take out the shovel, then **hold** `E` on any planted plot to dig the crop up and
@@ -159,6 +187,7 @@ src/
   state.js        save file, money, inventory, growth timers
   world.js        sky, lights, ground, plot grid, shop stall, scenery
   plants.js       procedural low-poly crop models (root/leaf/bush/vine/flower/pitaya/tree/orb)
+  devices.js      sprinkler and watering-can models, spray and splash effects
   gardener.js     the 3D gardener and their walk cycle
   player.js       movement, mouse look, first/third person camera
   ui.js           HUD, hotbar, shop tabs, pack reveals, toasts

@@ -1,6 +1,7 @@
 // Persistent game state: money, seeds, owned plots, planted crops.
 
-import { PLOT_COUNT, PLANTS_BY_ID, plotCost, plotLayout, LAYOUT_ID } from './data.js';
+import { PLOT_COUNT, PLANTS_BY_ID, plotCost, plotLayout, LAYOUT_ID,
+         CANS, CANS_BY_ID, SPRINKLERS_BY_ID } from './data.js';
 
 const SAVE_KEY = 'sheckle-garden-save-v1';
 export const SAVE_VERSION = 2;
@@ -13,7 +14,10 @@ function freshState() {
     seeds: { carrot: 0 },
     discovered: { carrot: true, radish: true, lettuce: true },
     owned: 1,                       // number of unlocked plots (first N of plotOrder)
-    plots: new Array(PLOT_COUNT).fill(null), // { plantId, plantedAt, taken }
+    plots: new Array(PLOT_COUNT).fill(null),      // { plantId, plantedAt, taken, watered }
+    sprinklers: new Array(PLOT_COUNT).fill(null), // sprinkler id sitting on each plot
+    stock: {},                                    // sprinklers bought but not yet placed
+    cans: {},                                     // watering cans owned
     stats: { harvested: 0, earned: 0, packsOpened: 0, best: null },
   };
 }
@@ -45,13 +49,25 @@ function sanitize(raw) {
   }
   for (const id of Object.keys(s.seeds)) s.discovered[id] = true;
 
+  s.cans = {};
+  for (const id of Object.keys(raw.cans || {})) if (CANS_BY_ID[id]) s.cans[id] = true;
+
+  s.stock = {};
+  for (const [id, n] of Object.entries(raw.stock || {})) {
+    if (SPRINKLERS_BY_ID[id] && Number.isFinite(n) && n > 0) s.stock[id] = Math.floor(n);
+  }
+
+  const rawSpr = Array.isArray(raw.sprinklers) ? raw.sprinklers : [];
+  s.sprinklers = new Array(PLOT_COUNT).fill(null)
+    .map((_, i) => (SPRINKLERS_BY_ID[rawSpr[i]] ? rawSpr[i] : null));
+
   const clean = p => {
     if (!p || !PLANTS_BY_ID[p.plantId] || !Number.isFinite(p.plantedAt)) return null;
     const plant = PLANTS_BY_ID[p.plantId];
     // Saves from before multi-harvest have no `taken`; they start fresh.
     const taken = Number.isFinite(p.taken) ? Math.min(Math.max(0, Math.floor(p.taken)), plant.harvests - 1) : 0;
     // A clock set backwards shouldn't leave a crop growing forever.
-    const out = { plantId: p.plantId, plantedAt: Math.min(p.plantedAt, Date.now()), taken };
+    const out = { plantId: p.plantId, plantedAt: Math.min(p.plantedAt, Date.now()), taken, watered: !!p.watered };
     if (Number.isFinite(p.x) && Number.isFinite(p.z)) { out.x = p.x; out.z = p.z; }
     return out;
   };
@@ -149,20 +165,68 @@ export function earn(amount) {
 
 export function nextPlotCost() { return plotCost(state.owned); }
 
+// ---- sprinklers -------------------------------------------------------
+
+const cells = plotLayout();
+let speeds = new Array(PLOT_COUNT).fill(1);
+
+/** Recompute each plot's growth multiplier. Call whenever sprinklers change. */
+export function refreshSprinklers() {
+  speeds = cells.map((cell, i) => {
+    let best = 1;
+    for (let j = 0; j < PLOT_COUNT; j++) {
+      const s = SPRINKLERS_BY_ID[state.sprinklers[j]];
+      if (!s) continue;
+      if (Math.hypot(cells[j].x - cell.x, cells[j].z - cell.z) <= s.radius + 1e-6) {
+        best = Math.max(best, s.speed);   // overlapping sprinklers don't stack
+      }
+    }
+    return best;
+  });
+  return speeds;
+}
+
+/** Growth multiplier on a plot from whatever sprinklers reach it. */
+export function plotSpeed(index) { return speeds[index] ?? 1; }
+
+/** The sprinkler standing on this plot, if any. */
+export function sprinklerAt(index) { return SPRINKLERS_BY_ID[state.sprinklers[index]] || null; }
+
+export function stockCount(id) { return state.stock[id] || 0; }
+
+export function addSprinkler(id, n = 1) { state.stock[id] = stockCount(id) + n; }
+
+export function takeSprinkler(id) {
+  if (stockCount(id) <= 0) return false;
+  state.stock[id] -= 1;
+  if (state.stock[id] <= 0) delete state.stock[id];
+  return true;
+}
+
+/** The best watering can owned, or null. */
+export function bestCan() {
+  let best = null;
+  for (const can of CANS) if (state.cans[can.id]) best = !best || can.boost > best.boost ? can : best;
+  return best;
+}
+
+// ---- growth -----------------------------------------------------------
+
 /** Seconds this plot's current cycle takes — the first is the slow one. */
-export function cycleSeconds(plot) {
+export function cycleSeconds(plot, index = -1) {
   const plant = PLANTS_BY_ID[plot?.plantId];
   if (!plant) return 1;
-  return plot.taken > 0 ? plant.regrow : plant.grow;
+  const base = plot.taken > 0 ? plant.regrow : plant.grow;
+  return index >= 0 ? base / plotSpeed(index) : base;
 }
 
 /** Growth progress of a plot's current cycle, 0..1. */
-export function growth(plot) {
+export function growth(plot, index = -1) {
   if (!plot || !PLANTS_BY_ID[plot.plantId]) return 0;
-  return Math.min(1, (Date.now() - plot.plantedAt) / (cycleSeconds(plot) * 1000));
+  return Math.min(1, (Date.now() - plot.plantedAt) / (cycleSeconds(plot, index) * 1000));
 }
 
-export function isRipe(plot) { return growth(plot) >= 1; }
+export function isRipe(plot, index = -1) { return growth(plot, index) >= 1; }
 
 /** True once this plant has been picked at least once. */
 export function isRegrowing(plot) { return !!plot && plot.taken > 0; }
@@ -172,3 +236,6 @@ export function harvestsLeft(plot) {
   const plant = PLANTS_BY_ID[plot?.plantId];
   return plant ? plant.harvests - (plot.taken || 0) : 0;
 }
+
+// Sprinkler coverage is derived from the loaded save, once everything above exists.
+refreshSprinklers();

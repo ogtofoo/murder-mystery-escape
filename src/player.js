@@ -2,6 +2,7 @@
 
 import * as THREE from 'three';
 import { buildGardener, buildShovel, animateGardener, setShovel } from './gardener.js';
+import { buildCan } from './devices.js';
 
 const WALK = 5.2;
 const SPRINT = 9.0;
@@ -30,7 +31,10 @@ export class Player {
     scene.add(camera);
 
     this.shovel = false;
+    this.can = false;
     this.digging = 0;
+    this.heldCan = null;      // in-hand can model
+    this.fpCan = null;        // first-person can model
 
     this.pos = new THREE.Vector3(0, 0, 9);
     this.vy = 0;
@@ -89,7 +93,33 @@ export class Player {
   setShovel(on) {
     this.shovel = on;
     setShovel(this.model, on);
+    if (on) this.can = false;
     return on;
+  }
+
+  /** Show or hide a watering can, building the model for the given spec. */
+  setCan(on, spec = null) {
+    if (on && spec && this.canSpec?.id !== spec.id) {
+      if (this.heldCan) this.model.userData.armR.remove(this.heldCan);
+      if (this.fpCan) this.camera.remove(this.fpCan);
+      this.canSpec = spec;
+
+      this.heldCan = buildCan(spec);
+      this.heldCan.position.set(0.06, -0.62, 0.06);
+      this.heldCan.rotation.set(0, 0.5, -0.2);
+      this.heldCan.scale.setScalar(0.9);
+      this.model.userData.armR.add(this.heldCan);
+
+      this.fpCan = buildCan(spec);
+      this.fpCan.position.set(0.36, -0.34, -0.66);
+      this.fpCan.rotation.set(0.1, -0.5, -0.15);
+      this.fpCan.scale.setScalar(0.85);
+      this.camera.add(this.fpCan);
+    }
+    this.can = on && !!this.canSpec;
+    if (this.heldCan) this.heldCan.visible = false;   // updated per frame
+    if (this.fpCan) this.fpCan.visible = false;
+    return this.can;
   }
 
   toggleView() {
@@ -165,6 +195,12 @@ export class Player {
     this.model.position.copy(this.pos);
     this.model.visible = this.view === 'third';
     this.fpShovel.visible = this.shovel && this.view === 'first';
+    if (this.heldCan) this.heldCan.visible = this.can && this.view === 'third';
+    if (this.fpCan) {
+      this.fpCan.visible = this.can && this.view === 'first';
+      const bob = Math.sin(t * 8) * 0.02 * this.speed01;
+      this.fpCan.position.y = -0.34 + bob;
+    }
     if (this.fpShovel.visible) {
       // Little heft as you walk, and a chop while digging.
       const bob = Math.sin(t * 8) * 0.02 * this.speed01;

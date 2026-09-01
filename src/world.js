@@ -144,7 +144,8 @@ export function buildWorld(scene) {
     group.add(cropAnchor);
 
     scene.add(group);
-    return { index: i, group, soil, rim, locked, label, hit, highlight, cropAnchor, crop: null, x: cell.x, z: cell.z };
+    return { index: i, group, soil, rim, locked, label, hit, highlight, cropAnchor,
+             crop: null, sprinkler: null, x: cell.x, z: cell.z };
   });
 
   const stall = buildStall();
@@ -155,7 +156,7 @@ export function buildWorld(scene) {
 
   scatterScenery(scene, edge);
 
-  return { plots, stall, sun, ground };
+  return { plots, stall, sun, ground, soilMat };
 }
 
 function buildStall() {
