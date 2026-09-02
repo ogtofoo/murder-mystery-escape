@@ -4,12 +4,15 @@ import * as THREE from 'three';
 import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollPack, plotCost, PLOT_COUNT, refundValue, SEED_REFUND,
          CANS_BY_ID, SPRINKLERS_BY_ID, TURRETS_BY_ID, WEAPONS_BY_ID, plotLayout,
          raidLevel, BUG_SLOW, TROPHIES, goldenMultiplier, WEATHERS, rollWeather, rollMutation,
-         mutationMultiplier, mutationName, mutationColor } from './data.js';
+         mutationMultiplier, mutationName, mutationColor,
+         PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS_BY_ID, rollPet,
+         UPGRADES_BY_ID, upgradeCost } from './data.js';
 import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount,
          growth, isRipe, isRegrowing, harvestsLeft, cycleSeconds,
          refreshSprinklers, plotSpeed, sprinklerSpeed, sprinklerAt, stockCount, addSprinkler, takeSprinkler,
          bestCan, bugsOn, addBug, removeBug, turretAt, deviceAt,
-         cropValue, goldenPending, canGoldenHarvest, goldenHarvest, claimTrophies, weatherSpeed } from './state.js';
+         cropValue, goldenPending, canGoldenHarvest, goldenHarvest, claimTrophies, weatherSpeed,
+         equippedPets, petPower, petHarvestRange, luckMultiplier, upgradeLevel, nextUpgradeCost, rank } from './state.js';
 import { buildWorld } from './world.js';
 import { buildPlant, animatePlant, applyMutation } from './plants.js';
 import { buildSprinkler, animateSprinkler, buildCan, waterBurst,
@@ -20,6 +23,7 @@ import { sfx } from './sfx.js';
 import { GamepadInput, BTN } from './gamepad.js';
 import { BugSystem } from './bugs.js';
 import { Sky, dayPhase, isNight, clockLabel } from './sky.js';
+import { PetPack } from './pets.js';
 import { renderPadTest } from './padtest.js';
 import { BUILD_LABEL } from './build.js';
 
@@ -55,11 +59,31 @@ const ui = new UI({
     importSave(text);
     refreshSprinklers();
     restoreBugs();
+    syncPets();
     syncAllPlots(true);
     ui.refresh();
     ui.toast('Backup restored — welcome back.', 'gold');
   },
   goldenHarvest: () => doGoldenHarvest(),
+  buyEgg: id => buyEgg(id),
+  buyUpgrade: id => buyUpgrade(id),
+  equipPet: uid => {
+    const at = state.equipped.indexOf(uid);
+    if (at >= 0) state.equipped.splice(at, 1);
+    else if (state.equipped.length < PET_SLOTS) state.equipped.push(uid);
+    else { ui.toast(`Only ${PET_SLOTS} pets can be out at once.`, 'bad'); return; }
+    syncPets(); save();
+  },
+  releasePet: uid => {
+    const i = state.pets.findIndex(p => p.uid === uid);
+    if (i < 0) return;
+    const spec = PETS_BY_ID[state.pets[i].id];
+    state.pets.splice(i, 1);
+    state.equipped = state.equipped.filter(x => x !== uid);
+    syncPets();
+    ui.toast(`${spec.name} went back to the wild.`);
+    save();
+  },
   toggleShovel: () => toggleShovel(),
   toggleWeapon: () => toggleWeapon(),
   buyWeapon: id => buyWeapon(id),
@@ -203,6 +227,16 @@ function sellDevice(id, all = false) {
   const paid = Math.max(1, Math.floor(spec.cost * SEED_REFUND)) * qty;
   earn(paid);
   ui.toast(`Sold ${qty} ${spec.name}${qty === 1 ? '' : 's'} back for <b class="coin">₪${fmt(paid)}</b>`);
+  sfx.buy(); ui.refresh(); save();
+}
+
+function buyUpgrade(id) {
+  const u = UPGRADES_BY_ID[id];
+  if (!u) return;
+  const cost = nextUpgradeCost(id);
+  if (!spend(cost)) { ui.toast('Not enough sheckles.', 'bad'); sfx.deny(); return; }
+  state.upgrades[id] = upgradeLevel(id) + 1;
+  ui.toast(`⬆ <b>${u.name}</b> level ${state.upgrades[id]} — ${u.hint}`, 'gold');
   sfx.buy(); ui.refresh(); save();
 }
 
@@ -500,6 +534,86 @@ function updateEffects(dt) {
   }
 }
 
+// ---------------------------------------------------------------- pets
+
+const petPack = new PetPack(scene);
+
+function syncPets() {
+  petPack.sync(equippedPets());
+  ui.refresh();
+}
+
+function buyEgg(id) {
+  const egg = EGGS_BY_ID[id];
+  if (!egg) return;
+  if (!spend(egg.cost)) { ui.toast('Not enough sheckles.', 'bad'); sfx.deny(); return; }
+  state.eggs.push({ id, readyAt: Date.now() + egg.hatch * 1000 });
+  ui.toast(`🥚 ${egg.name} bought — hatching in ${egg.hatch}s`, 'gold');
+  sfx.buy(); ui.refresh(); save();
+}
+
+function hatchEgg(index) {
+  const entry = state.eggs[index];
+  const egg = EGGS_BY_ID[entry?.id];
+  if (!egg) return;
+  state.eggs.splice(index, 1);
+  const spec = rollPet(egg.weights);
+  const pet = { uid: state.nextPetUid++, id: spec.id, level: 1, xp: 0 };
+  state.pets.push(pet);
+  if (state.equipped.length < PET_SLOTS) state.equipped.push(pet.uid);
+  state.stats.hatched = (state.stats.hatched || 0) + 1;
+  syncPets();
+  ui.showHatch(spec);
+  sfx.pack(TIERS[spec.tier].order);
+  gamepad.rumble(0.6, 300);
+  save();
+}
+
+/** Eggs tick down; pets earn experience just by being out. */
+let petClock = 0;
+function updatePets(dt, t) {
+  for (let i = state.eggs.length - 1; i >= 0; i--) {
+    if (Date.now() >= state.eggs[i].readyAt) hatchEgg(i);
+  }
+  petPack.update(dt, t, player.pos, player.yaw);
+
+  petClock += dt;
+  if (petClock < 1) return;
+  const seconds = petClock;
+  petClock = 0;
+
+  let levelled = false;
+  for (const owned of equippedPets()) {
+    if (owned.level >= PET_MAX_LEVEL) continue;
+    owned.xp += seconds;
+    while (owned.level < PET_MAX_LEVEL && owned.xp >= petXpFor(owned.level)) {
+      owned.xp -= petXpFor(owned.level);
+      owned.level++;
+      levelled = true;
+      ui.toast(`⭐ <b>${PETS_BY_ID[owned.id].name}</b> reached level ${owned.level}`, 'gold');
+      sfx.buy();
+    }
+  }
+  if (levelled) { ui.refresh(); save(); }
+
+  // Ladybug-style pets chew through nearby bugs.
+  const bite = petPower('pest');
+  if (bite > 0) {
+    for (const bug of bugs.near(player.pos.x, player.pos.z, 7)) bugs.damage(bug, bite * 12 * seconds);
+  }
+
+  // Bunnies and foxes bring in whatever is ripe near you.
+  const reach = petHarvestRange();
+  if (reach > 0) {
+    for (let i = 0; i < PLOT_COUNT; i++) {
+      const plot = state.plots[i];
+      if (!plot || !isRipe(plot, i)) continue;
+      const v = world.plots[i];
+      if (Math.hypot(v.x - player.pos.x, v.z - player.pos.z) <= reach) harvest(i);
+    }
+  }
+}
+
 // ---------------------------------------------------------------- sky & weather
 
 const sky = new Sky(scene, world.sun, world.hemi);
@@ -530,7 +644,7 @@ const bugs = new BugSystem(scene, {
   onAttach: (index, specId) => { addBug(index, specId); },
   onDetach: (index, specId) => { removeBug(index, specId); },
   onKill: bug => {
-    earn(bug.spec.bounty);
+    earn(Math.floor(bug.spec.bounty * (1 + upgradeLevel('traps') * 0.2)));
     state.stats.bugsKilled++;
     burst({ x: bug.mesh.position.x, z: bug.mesh.position.z }, bug.spec.color);
     if (bug.spec.boss) {
@@ -1024,11 +1138,13 @@ function tick() {
   updateGamepad(dt);
   const using = active && (player.keys.has('KeyE') || mouseHeld || gamepad.held.has(BTN.A));
   updateDigging(using && !player.weapon);
+  updatePets(dt, t);
   updateWeather();
   const phase = dayPhase();
   sky.update(dt, phase, player.pos);
   if (sky.takeStrike()) sfx.thunder();
   ui.setSky(phase, state.weather);
+  ui.setEggs(Date.now());
   updateRaids();
   bugs.update(dt, t, camera);
   updateTurrets(dt);
@@ -1067,7 +1183,7 @@ function tick() {
       ripe++;
       // A crop takes on its mutation the moment it finishes ripening.
       if (data.mut === undefined) {
-        data.mut = rollMutation(state.weather);
+        data.mut = rollMutation(state.weather, luckMultiplier());
         if (data.mut) {
           const name = mutationName(data.mut);
           const mult = mutationMultiplier(data.mut);
@@ -1095,11 +1211,12 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { build: BUILD_LABEL, sky, doGoldenHarvest, updateWeather, sellDevice, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
+window.game = { build: BUILD_LABEL, sky, petPack, doGoldenHarvest, updateWeather, sellDevice, buyEgg, hatchEgg, buyUpgrade, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
                 placeSprinkler, buyWeapon, buyTurret, placeTurret, bugs, startRaid, fireWeapon,
                 waterPlot, refreshSprinklers, plotSpeed, state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
 
 restoreBugs();
+syncPets();
 syncAllPlots();
 ui.refresh();
 document.getElementById('loading').remove();

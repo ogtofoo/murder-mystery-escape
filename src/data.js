@@ -170,6 +170,100 @@ export function rollBug(level) {
   return pool[pool.length - 1];
 }
 
+// ---- Pets --------------------------------------------------------------
+
+/**
+ * Pets hatch from eggs, follow you around and help out. Each has one ability
+ * whose strength scales with its level, and up to PET_SLOTS can be out at once.
+ */
+export const PET_SLOTS = 3;
+
+export const PETS = [
+  { id:'snail',   name:'Garden Snail', tier:'common',       ability:'growth',  power:0.05, shape:'snail',  colors:[0xa1887f, 0xc5e1a5] },
+  { id:'ladybug', name:'Ladybug',      tier:'common',       ability:'pest',    power:6,    shape:'beetle', colors:[0xe53935, 0x212121] },
+  { id:'bee',     name:'Honey Bee',    tier:'uncommon',     ability:'luck',    power:0.6,  shape:'bee',    colors:[0xffc107, 0x212121] },
+  { id:'bunny',   name:'Bunny',        tier:'rare',         ability:'harvest', power:4.5,  shape:'bunny',  colors:[0xf5f5f5, 0xffcdd2] },
+  { id:'cat',     name:'Barn Cat',     tier:'rare',         ability:'value',   power:0.06, shape:'cat',    colors:[0xff9800, 0xfff3e0] },
+  { id:'fox',     name:'Fox',          tier:'legendary',    ability:'harvest', power:8,    shape:'cat',    colors:[0xf4511e, 0xffffff] },
+  { id:'owl',     name:'Wise Owl',     tier:'mythic',       ability:'luck',    power:1.8,  shape:'owl',    colors:[0x8d6e63, 0xffe082] },
+  { id:'drake',   name:'Baby Drake',   tier:'prismatic',    ability:'growth',  power:0.22, shape:'drake',  colors:[0x7c4dff, 0x69f0ae] },
+  { id:'phoenix', name:'Phoenix Chick',tier:'transcendent', ability:'value',   power:0.3,  shape:'drake',  colors:[0xff6d00, 0xffd54f] },
+  { id:'sprite',  name:'Star Sprite',  tier:'super',        ability:'luck',    power:4.5,  shape:'sprite', colors:[0xffffff, 0xffe082] },
+];
+export const PETS_BY_ID = Object.fromEntries(PETS.map(p => [p.id, p]));
+
+export const ABILITY_TEXT = {
+  growth: (p, lv) => `+${Math.round(p.power * lv * 100)}% growth speed`,
+  value:  (p, lv) => `+${Math.round(p.power * lv * 100)}% crop value`,
+  luck:   (p, lv) => `×${(1 + p.power * lv).toFixed(1)} mutation luck`,
+  harvest:(p, lv) => `auto-picks ripe crops within ${(p.power + lv * 0.4).toFixed(1)}m`,
+  pest:   (p, lv) => `${Math.round(p.power * lv * 12)} damage/s to nearby bugs`,
+};
+
+/** Eggs: pricier eggs hold better odds. */
+export const EGGS = [
+  { id:'egg_common', name:'Garden Egg',    cost:250000, hatch:60,  weights:{ common:62, uncommon:28, rare:9, legendary:1 } },
+  { id:'egg_rare',   name:'Exotic Egg',    cost:8e8,    hatch:120, weights:{ rare:44, legendary:38, mythic:16, prismatic:2 } },
+  { id:'egg_myth',   name:'Celestial Egg', cost:5e11,   hatch:180, weights:{ legendary:26, mythic:40, prismatic:26, transcendent:8 } },
+  { id:'egg_super',  name:'SUPER Egg',     cost:2e14,   hatch:240, weights:{ prismatic:30, transcendent:45, super:25 } },
+];
+export const EGGS_BY_ID = Object.fromEntries(EGGS.map(e => [e.id, e]));
+
+/** XP needed to reach the next level; pets gain XP just by being out. */
+export function petXpFor(level) { return Math.floor(60 * Math.pow(1.45, level - 1)); }
+export const PET_MAX_LEVEL = 25;
+
+export function rollPet(weights) {
+  const pool = PETS.filter(p => weights[p.tier]);
+  const total = pool.reduce((a, p) => a + weights[p.tier], 0);
+  let r = Math.random() * total;
+  for (const p of pool) { r -= weights[p.tier]; if (r <= 0) return p; }
+  return pool[pool.length - 1];
+}
+
+// ---- Garden Mastery: upgrades that never run out ------------------------
+
+export const UPGRADES = [
+  { id:'soil',    name:'Fertile Soil',   hint:'+6% growth speed per level',   base:2e6,  scale:2.15, step:0.06 },
+  { id:'sap',     name:'Rich Sap',       hint:'+6% crop value per level',     base:5e6,  scale:2.25, step:0.06 },
+  { id:'clover',  name:'Four-Leaf Field',hint:'+25% mutation luck per level', base:2e7,  scale:2.45, step:0.25 },
+  { id:'traps',   name:'Steel Traps',    hint:'+20% bug bounty per level',    base:1e7,  scale:2.2,  step:0.20 },
+  { id:'compost', name:'Golden Compost', hint:'+3% Golden Seeds per level',   base:1e9,  scale:2.6,  step:0.03 },
+];
+export const UPGRADES_BY_ID = Object.fromEntries(UPGRADES.map(u => [u.id, u]));
+
+export function upgradeCost(u, level) {
+  return Math.floor(u.base * Math.pow(u.scale, level));
+}
+
+// ---- Ranks -------------------------------------------------------------
+
+export const RANKS = [
+  { at: 0,     name:'Seedling',        icon:'🌱' },
+  { at: 1e3,   name:'Sprout',          icon:'🌿' },
+  { at: 1e5,   name:'Gardener',        icon:'🧑‍🌾' },
+  { at: 1e7,   name:'Farmer',          icon:'🚜' },
+  { at: 1e9,   name:'Grower',          icon:'🌻' },
+  { at: 1e11,  name:'Cultivator',      icon:'🌳' },
+  { at: 1e13,  name:'Botanist',        icon:'🔬' },
+  { at: 1e15,  name:'Sheckle Baron',   icon:'💰' },
+  { at: 1e17,  name:'Garden Tycoon',   icon:'🏆' },
+  { at: 1e19,  name:'Living Legend',   icon:'⭐' },
+  { at: 1e21,  name:'Garden God',      icon:'👑' },
+  { at: 1e24,  name:'MYTHWEAVER',      icon:'🌌' },
+  { at: 1e27,  name:'SHECKLE OVERLORD',icon:'🔥' },
+];
+
+export function rankFor(earned) {
+  let r = RANKS[0];
+  for (const x of RANKS) if (earned >= x.at) r = x;
+  return r;
+}
+
+export function nextRank(earned) {
+  return RANKS.find(x => earned < x.at) || null;
+}
+
 // ---- Weather -----------------------------------------------------------
 
 /**
@@ -215,9 +309,9 @@ export const MARKS = {
 };
 
 /** Roll what a crop becomes as it ripens under this weather. */
-export function rollMutation(weather) {
+export function rollMutation(weather, extraLuck = 1) {
   const w = WEATHERS[weather] || WEATHERS.clear;
-  const luck = w.variantLuck || 1;
+  const luck = (w.variantLuck || 1) * Math.max(1, extraLuck);
 
   const pool = VARIANTS.map(v => ({ v, weight: v.id === 'normal' ? v.weight : v.weight * luck }));
   const total = pool.reduce((a, x) => a + x.weight, 0);
@@ -307,6 +401,10 @@ export const TROPHIES = [
   { id:'goldcrop',  name:'Midas Crop',       hint:'Harvest a Gold crop (20×)',       goal:20,    at:s => s.best?.mult || 1, reward:3e6 },
   { id:'rainbowcrop',name:'Over the Rainbow',hint:'Harvest a Rainbow crop (50×)',    goal:50,    at:s => s.best?.mult || 1, reward:5e8 },
   { id:'legendcrop',name:'One in a Million',  hint:'Harvest a crop worth 1,000×',    goal:1000,  at:s => s.best?.mult || 1, reward:0, golden:25 },
+  { id:'pets3',     name:'Best Friends',     hint:'Hatch 3 pets',                    goal:3,     at:s => s.pets?.length || 0, reward:1e6 },
+  { id:'pets10',    name:'Full Menagerie',   hint:'Hatch 10 pets',                   goal:10,    at:s => s.pets?.length || 0, reward:2e9 },
+  { id:'mastery20', name:'Garden Mastery',   hint:'Buy 20 Mastery upgrade levels',   goal:20,    at:s => Object.values(s.upgrades || {}).reduce((a, b) => a + b, 0), reward:5e10 },
+  { id:'rankgod',   name:'Garden God',       hint:'Earn ₪1 sextillion all-time',     goal:1e21,  at:s => s.stats.earned, reward:0, golden:250 },
   { id:'golden1',   name:'Golden Touch',     hint:'Do one Golden Harvest',          goal:1,     at:s => s.prestiges, reward:0, golden:5 },
   { id:'golden10',  name:'Living Legend',    hint:'Do 10 Golden Harvests',          goal:10,    at:s => s.prestiges, reward:0, golden:100 },
 ];

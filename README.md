@@ -160,6 +160,40 @@ They **multiply together**, and on top of your Golden Seed bonus. A Rainbow Shoc
 thunderstorm is **2,500×** its normal price; a Rainbow Celestial in a meteor shower is **6,000×**.
 A plain tomato sells for ₪180. A Rainbow Shocked one sells for ₪450,000.
 
+### 🐾 Pets
+
+Buy an egg, keep gardening, and it hatches on its own into one of ten companions that follow
+you around the field. Three can be out at once, and they level up just by being with you —
+every level makes their ability stronger.
+
+| Pet | Tier | Does |
+| --- | --- | --- |
+| Garden Snail | Common | Growth speed |
+| Ladybug | Common | Chews through nearby bugs |
+| Honey Bee | Uncommon | Mutation luck |
+| Bunny | Rare | Auto-picks ripe crops near you |
+| Barn Cat | Rare | Crop value |
+| Fox | Legendary | Auto-picks, wider |
+| Wise Owl | Mythic | Mutation luck ++ |
+| Baby Drake | Prismatic | Growth speed +++ |
+| Phoenix Chick | Transcendent | Crop value +++ |
+| Star Sprite | SUPER | Mutation luck ×5.5 per level |
+
+A level-10 Star Sprite multiplies your mutation luck by 46 — Rainbow crops stop being a
+once-a-week event.
+
+### ⬆ Garden Mastery
+
+Five permanent upgrades with **no level cap**, so sheckles always have somewhere to go: growth
+speed, crop value, mutation luck, bug bounty and Golden Seed gain. Costs roughly double each
+level, running from millions into the sextillions. They survive a Golden Harvest.
+
+### 🏅 Ranks
+
+Your all-time earnings carry a title, shown under the wallet:
+Seedling → Sprout → Gardener → Farmer → Grower → Cultivator → Botanist → Sheckle Baron →
+Garden Tycoon → Living Legend → Garden God → MYTHWEAVER → **SHECKLE OVERLORD**.
+
 ### ✨ Golden Harvest — the endgame
 
 Once every plot is tilled and you've earned ₪100T in a run, the shop's **Golden** tab offers a

@@ -3,7 +3,9 @@
 import { PLOT_COUNT, PLANTS_BY_ID, plotCost, plotLayout, LAYOUT_ID,
          CANS, CANS_BY_ID, SPRINKLERS_BY_ID, TURRETS_BY_ID, WEAPONS_BY_ID,
          BUGS_BY_ID, BUG_SLOW, TROPHIES, goldenFor, goldenMultiplier,
-         GOLDEN_MIN_EARNED, WEATHERS, mutationMultiplier, VARIANTS_BY_ID, MARKS } from './data.js';
+         GOLDEN_MIN_EARNED, WEATHERS, mutationMultiplier, VARIANTS_BY_ID, MARKS,
+         PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS_BY_ID,
+         UPGRADES, UPGRADES_BY_ID, upgradeCost, rankFor } from './data.js';
 
 const SAVE_KEY = 'sheckle-garden-save-v1';
 export const SAVE_VERSION = 2;
@@ -31,6 +33,11 @@ function freshState() {
     weather: 'clear',
     weatherUntil: 0,
     best: { mult: 1, name: '', plant: null },   // finest crop ever pulled
+    pets: [],           // { uid, id, level, xp }
+    equipped: [],       // pet uids currently following you
+    eggs: [],           // { id, readyAt }
+    nextPetUid: 1,
+    upgrades: {},       // Garden Mastery levels
   };
 }
 
@@ -67,6 +74,21 @@ function sanitize(raw) {
   s.runEarned = Number.isFinite(raw.runEarned) ? Math.max(0, raw.runEarned) : (s.stats.earned || 0);
   s.trophies = {};
   for (const t of TROPHIES) if (raw.trophies?.[t.id]) s.trophies[t.id] = true;
+  s.pets = Array.isArray(raw.pets) ? raw.pets.filter(p => PETS_BY_ID[p?.id]).map(p => ({
+    uid: p.uid, id: p.id,
+    level: Math.min(PET_MAX_LEVEL, Math.max(1, Math.floor(p.level) || 1)),
+    xp: Math.max(0, p.xp || 0),
+  })) : [];
+  s.nextPetUid = Math.max(1, Number(raw.nextPetUid) || 1, ...s.pets.map(p => (p.uid || 0) + 1));
+  s.equipped = Array.isArray(raw.equipped)
+    ? raw.equipped.filter(uid => s.pets.some(p => p.uid === uid)).slice(0, PET_SLOTS) : [];
+  s.eggs = Array.isArray(raw.eggs)
+    ? raw.eggs.filter(e => EGGS_BY_ID[e?.id] && Number.isFinite(e.readyAt)).slice(0, 12) : [];
+  s.upgrades = {};
+  for (const u of UPGRADES) {
+    const lv = Math.floor(raw.upgrades?.[u.id] || 0);
+    if (lv > 0) s.upgrades[u.id] = lv;
+  }
   s.weather = WEATHERS[raw.weather] ? raw.weather : 'clear';
   s.weatherUntil = Number.isFinite(raw.weatherUntil) ? raw.weatherUntil : 0;
   s.best = raw.best && Number.isFinite(raw.best.mult) ? raw.best : { mult: 1, name: '', plant: null };
@@ -198,14 +220,52 @@ export function earn(amount) {
   state.runEarned += amount;
 }
 
-/** What a crop is worth right now: base × mutation × Golden Seeds. */
-export function cropValue(plant, mut = null) {
-  return Math.floor(plant.sell * mutationMultiplier(mut) * goldenMultiplier(state.golden));
+// ---- pets, upgrades and rank ------------------------------------------
+
+export function upgradeLevel(id) { return state.upgrades[id] || 0; }
+export function nextUpgradeCost(id) { return upgradeCost(UPGRADES_BY_ID[id], upgradeLevel(id)); }
+
+export function equippedPets() {
+  return state.equipped.map(uid => state.pets.find(p => p.uid === uid)).filter(Boolean);
 }
 
-/** Weather's contribution to how fast everything grows. */
+/** Total of one pet ability across everything you have out. */
+export function petPower(ability) {
+  let sum = 0;
+  for (const owned of equippedPets()) {
+    const spec = PETS_BY_ID[owned.id];
+    if (spec?.ability === ability) sum += spec.power * owned.level;
+  }
+  return sum;
+}
+
+export function petHarvestRange() {
+  let best = 0;
+  for (const owned of equippedPets()) {
+    const spec = PETS_BY_ID[owned.id];
+    if (spec?.ability === 'harvest') best = Math.max(best, spec.power + owned.level * 0.4);
+  }
+  return best;
+}
+
+/** Mutation luck from pets and the Four-Leaf upgrade, as a multiplier. */
+export function luckMultiplier() {
+  return (1 + petPower('luck')) * (1 + upgradeLevel('clover') * 0.25);
+}
+
+export function rank() { return rankFor(state.stats.earned); }
+
+/** What a crop is worth: base × mutation × Golden Seeds × pets × upgrades. */
+export function cropValue(plant, mut = null) {
+  const boost = (1 + petPower('value')) * (1 + upgradeLevel('sap') * 0.06);
+  return Math.floor(plant.sell * mutationMultiplier(mut) * goldenMultiplier(state.golden) * boost);
+}
+
+/** Weather, pets and upgrades all speed the whole garden up. */
 export function weatherSpeed() {
-  return WEATHERS[state.weather]?.growth ?? 1;
+  return (WEATHERS[state.weather]?.growth ?? 1)
+    * (1 + petPower('growth'))
+    * (1 + upgradeLevel('soil') * 0.06);
 }
 
 // ---- Golden Harvest ---------------------------------------------------
@@ -224,7 +284,7 @@ export function canGoldenHarvest() {
  */
 export function goldenHarvest() {
   if (!canGoldenHarvest()) return 0;
-  const gained = goldenPending();
+  const gained = Math.floor(goldenPending() * (1 + upgradeLevel('compost') * 0.03));
   state.golden += gained;
   state.prestiges += 1;
 

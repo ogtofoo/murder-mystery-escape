@@ -3,8 +3,11 @@
 import { PLANTS, PLANTS_BY_ID, PACKS, TIERS, TIER_ORDER, PLOT_COUNT, fmt, refundValue, SEED_REFUND,
          CANS, SPRINKLERS, SPRINKLERS_BY_ID, sprinklerCoverage,
          WEAPONS, TURRETS, TURRETS_BY_ID, TROPHIES, GOLDEN_BONUS, GOLDEN_MIN_EARNED,
-         goldenMultiplier, WEATHERS, VARIANTS, MARKS, mutationMultiplier } from './data.js';
-import { state, seedCount, stockCount, goldenPending, canGoldenHarvest, trophyProgress, cropValue } from './state.js';
+         goldenMultiplier, WEATHERS, VARIANTS, MARKS, mutationMultiplier,
+         PETS, PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS, ABILITY_TEXT,
+         UPGRADES, upgradeCost, rankFor, nextRank } from './data.js';
+import { state, seedCount, stockCount, goldenPending, canGoldenHarvest, trophyProgress, cropValue,
+         upgradeLevel, nextUpgradeCost, equippedPets, luckMultiplier } from './state.js';
 
 const $ = sel => document.querySelector(sel);
 
@@ -27,6 +30,7 @@ export class UI {
       shop: $('#shop'), body: $('#shopbody'), overlay: $('#overlay'), plotline: $('#plotline'),
       packmodal: $('#packmodal'), packcards: $('#packcards'), packtitle: $('#packtitle'),
       bossbar: $('#bossbar'), goldenline: $('#goldenline'), skyline: $('#skyline'),
+      rankline: $('#rankline'), eggline: $('#eggline'),
     };
 
     $('#playbtn').addEventListener('click', () => this.hooks.play());
@@ -72,6 +76,9 @@ export class UI {
     const mult = goldenMultiplier(state.golden);
     this.el.goldenline.classList.toggle('hidden', !state.golden);
     this.el.goldenline.textContent = `✨ ${state.golden} Golden Seeds · ${mult.toFixed(1)}× crop value`;
+    const r = rankFor(state.stats.earned), nx = nextRank(state.stats.earned);
+    this.el.rankline.innerHTML = `${r.icon} <span style="color:var(--gold)">${r.name}</span>` +
+      (nx ? ` <span style="opacity:.55;font-weight:400">→ ${nx.name} at ₪${fmt(nx.at)}</span>` : '');
     this.renderHotbar();
     if (this.shopOpen) this.renderShop();
   }
@@ -132,6 +139,30 @@ export class UI {
     const time = `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
     const txt = `${time} · <span class="wx">${w.icon} ${w.name}${w.growth > 1 ? ` ${w.growth}×` : ''}</span>`;
     if (txt !== this._skyTxt) { this._skyTxt = txt; this.el.skyline.innerHTML = txt; }
+  }
+
+  /** Egg timers in the corner. */
+  setEggs(now) {
+    const eggs = state.eggs || [];
+    this.el.eggline.classList.toggle('hidden', !eggs.length);
+    const txt = eggs.map(e => {
+      const left = Math.max(0, Math.ceil((e.readyAt - now) / 1000));
+      const name = EGGS.find(x => x.id === e.id)?.name ?? 'Egg';
+      return `<div class="egg">🥚 ${name} — <b>${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}</b></div>`;
+    }).join('');
+    if (txt !== this._eggTxt) { this._eggTxt = txt; this.el.eggline.innerHTML = txt; }
+  }
+
+  /** Celebrate a new pet, reusing the seed-pack reveal. */
+  showHatch(spec) {
+    const t = TIERS[spec.tier];
+    this.el.packtitle.textContent = 'It hatched!';
+    this.el.packcards.innerHTML = `<div class="card" style="border-color:${t.css}; box-shadow:0 0 30px ${t.css}44">
+      <div class="t" style="color:${t.css}">${t.name}</div>
+      <div class="n">${spec.name}</div>
+      <div class="v">${ABILITY_TEXT[spec.ability](spec, 1)}</div>
+    </div>`;
+    this.el.packmodal.classList.remove('hidden');
   }
 
   setBugCount(n) {
@@ -220,6 +251,8 @@ export class UI {
     if (this.tab === 'seeds') this.renderSeeds();
     else if (this.tab === 'packs') this.renderPacks();
     else if (this.tab === 'tools') this.renderTools();
+    else if (this.tab === 'pets') this.renderPets();
+    else if (this.tab === 'mastery') this.renderMastery();
     else if (this.tab === 'trophies') this.renderTrophies();
     else if (this.tab === 'golden') this.renderGolden();
     else this.renderAlmanac();
@@ -411,6 +444,93 @@ export class UI {
     }
     for (const b of this.el.body.querySelectorAll('[data-sprinkler]')) {
       b.addEventListener('click', () => this.hooks.buySprinkler(b.dataset.sprinkler));
+    }
+  }
+
+  renderPets() {
+    const out = state.equipped;
+    let html = `<div class="tierhead">Eggs — pets follow you around and help. ${out.length}/${PET_SLOTS} out ·
+      mutation luck ×${luckMultiplier().toFixed(1)}</div>`;
+    for (const e of EGGS) {
+      html += `<div class="row">
+        <div class="stripe" style="background:linear-gradient(${Object.keys(e.weights).map(t => TIERS[t].css).join(',')})"></div>
+        <div>
+          <div class="name">${e.name}</div>
+          <div class="meta">hatches in ${e.hatch}s · ${Object.entries(e.weights)
+            .map(([t, w]) => `<span style="color:${TIERS[t].css}">${TIERS[t].name} ${Math.round(w / Object.values(e.weights).reduce((a, b) => a + b) * 100)}%</span>`)
+            .join(' · ')}</div>
+        </div>
+        <div class="own"></div>
+        <button class="buy big" data-egg="${e.id}" ${state.money < e.cost ? 'disabled' : ''}>₪ ${fmt(e.cost)}</button>
+      </div>`;
+    }
+
+    html += `<div class="tierhead">Your pets (${state.pets.length})</div>`;
+    if (!state.pets.length) {
+      html += `<div class="row"><div class="stripe" style="background:#666"></div>
+        <div><div class="name">No pets yet</div>
+        <div class="meta">Buy an egg above — it hatches on its own while you garden.</div></div>
+        <div class="own"></div><div></div></div>`;
+    } else {
+      html += '<div class="petgrid">';
+      for (const owned of [...state.pets].sort((a, b) =>
+          TIERS[PETS_BY_ID[b.id].tier].order - TIERS[PETS_BY_ID[a.id].tier].order || b.level - a.level)) {
+        const spec = PETS_BY_ID[owned.id], t = TIERS[spec.tier];
+        const isOut = out.includes(owned.uid);
+        const need = petXpFor(owned.level);
+        const pct = owned.level >= PET_MAX_LEVEL ? 100 : Math.min(100, (owned.xp / need) * 100);
+        html += `<div class="pet ${isOut ? 'out' : ''}" style="${isOut ? `border-color:${t.css}` : ''}">
+          <div class="tr" style="color:${t.css}">${t.name}</div>
+          <div class="nm">${spec.name} <span style="opacity:.6;font-size:12px">L${owned.level}</span></div>
+          <div class="ab">${ABILITY_TEXT[spec.ability](spec, owned.level)}</div>
+          <div class="xp"><i style="width:${pct}%"></i></div>
+          <div class="btns">
+            <button class="${isOut ? '' : 'go'}" data-pet="${owned.uid}">${isOut ? 'Put away' : 'Take out'}</button>
+            <button class="rel" data-release="${owned.uid}" title="Release">✕</button>
+          </div>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    this.el.body.innerHTML = html;
+    for (const b of this.el.body.querySelectorAll('[data-egg]')) {
+      b.addEventListener('click', () => this.hooks.buyEgg(b.dataset.egg));
+    }
+    for (const b of this.el.body.querySelectorAll('[data-pet]')) {
+      b.addEventListener('click', () => { this.hooks.equipPet(Number(b.dataset.pet)); this.renderShop(); });
+    }
+    for (const b of this.el.body.querySelectorAll('[data-release]')) {
+      b.addEventListener('click', () => {
+        const uid = Number(b.dataset.release);
+        const spec = PETS_BY_ID[state.pets.find(p => p.uid === uid)?.id];
+        if (spec && confirm(`Release your ${spec.name}? This cannot be undone.`)) {
+          this.hooks.releasePet(uid); this.renderShop();
+        }
+      });
+    }
+  }
+
+  renderMastery() {
+    let html = `<div class="tierhead">Garden Mastery — permanent upgrades with no ceiling.
+      They survive a Golden Harvest.</div>`;
+    for (const u of UPGRADES) {
+      const lv = upgradeLevel(u.id);
+      const cost = nextUpgradeCost(u.id);
+      html += `<div class="row">
+        <div class="stripe" style="background:var(--gold)"></div>
+        <div>
+          <div class="name">${u.name} <span style="opacity:.6;font-size:13px">level ${fmt(lv)}</span></div>
+          <div class="meta">${u.hint} · currently <b>${
+            u.id === 'clover' ? `×${(1 + lv * u.step).toFixed(2)} luck`
+            : `+${Math.round(lv * u.step * 100)}%`}</b></div>
+        </div>
+        <div class="own"></div>
+        <button class="buy" data-upgrade="${u.id}" ${state.money < cost ? 'disabled' : ''}>₪ ${fmt(cost)}</button>
+      </div>`;
+    }
+    this.el.body.innerHTML = html;
+    for (const b of this.el.body.querySelectorAll('[data-upgrade]')) {
+      b.addEventListener('click', () => { this.hooks.buyUpgrade(b.dataset.upgrade); this.renderShop(); });
     }
   }
 
