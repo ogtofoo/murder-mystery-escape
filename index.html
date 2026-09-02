@@ -16,11 +16,16 @@
 <div id="hud">
   <div id="topleft">
     <div id="wallet"><span class="coin">₪</span><span id="money">1</span> <span class="unit">sheckles</span></div>
+    <div id="goldenline" class="hidden"></div>
     <div id="plotline"><span id="plotcount">1</span> / 36 plots tilled</div>
   </div>
   <div id="crosshair"></div>
   <div id="prompt" class="hidden"></div>
   <div id="bugcount" class="hidden"></div>
+  <div id="bossbar" class="hidden">
+    <div class="bossname"></div>
+    <div class="bosstrack"><i></i></div>
+  </div>
   <div id="toasts"></div>
   <div id="hotbar"></div>
   <div id="hint">B shop &nbsp;·&nbsp; V view &nbsp;·&nbsp; E use &nbsp;·&nbsp; Esc menu</div>
@@ -33,6 +38,8 @@
       <button class="tab active" data-tab="seeds">Seeds</button>
       <button class="tab" data-tab="packs">Seed Packs</button>
       <button class="tab" data-tab="tools">Tools</button>
+      <button class="tab" data-tab="trophies">Trophies</button>
+      <button class="tab" data-tab="golden">✨ Golden</button>
       <button class="tab" data-tab="almanac">Almanac</button>
     </div>
     <button class="close" data-close-shop>✕</button>

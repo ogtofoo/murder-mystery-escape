@@ -1,7 +1,7 @@
 // Bug raids: spawning, crawling, chewing on crops, and dying.
 
 import * as THREE from 'three';
-import { BUGS_BY_ID, rollBug } from './data.js';
+import { BUGS_BY_ID, rollBug, bossOf } from './data.js';
 
 const SPAWN_RING = 16;   // far enough to see them coming, close enough to matter
 const ATTACH_DIST = 1.0;
@@ -11,6 +11,10 @@ function buildBug(spec) {
   const shell = new THREE.MeshStandardMaterial({ color: spec.color, flatShading: true, roughness: 0.55, metalness: 0.2 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, flatShading: true, roughness: 0.8 });
 
+  if (spec.boss) {
+    shell.emissive = new THREE.Color(spec.color).multiplyScalar(0.45);
+    shell.metalness = 0.7;
+  }
   const body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 0), shell);
   body.scale.set(1, 0.72, 1.35);
   body.position.y = 0.26;
@@ -44,6 +48,16 @@ function buildBug(spec) {
     }
   }
 
+  if (spec.boss) {
+    // Spiky crown so a MEGA bug reads as a boss at a glance.
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.34, 4), shell);
+      horn.position.set(Math.cos(a) * 0.2, 0.52, Math.sin(a) * 0.2 - 0.05);
+      horn.rotation.set(Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5);
+      g.add(horn);
+    }
+  }
   g.scale.setScalar(spec.size);
   g.userData = { legs, body };
   return g;
@@ -94,9 +108,29 @@ export class BugSystem {
     return spawned;
   }
 
+  /** One huge bug, worth a fortune, with a name the HUD can show. */
+  spawnBoss(level) {
+    const targets = this.hooks.plantedPlots();
+    if (!targets.length) return null;
+    const spec = bossOf(rollBug(level));
+    const a = Math.random() * Math.PI * 2;
+    const r = SPAWN_RING + 3;
+    const bug = this.spawn(spec, Math.cos(a) * r, Math.sin(a) * r,
+                           targets[Math.floor(Math.random() * targets.length)]);
+    bug.bar.visible = false;
+    this.boss = bug;
+    return bug;
+  }
+
+  /** The living boss, if there is one. */
+  get activeBoss() {
+    return this.boss && this.bugs.includes(this.boss) ? this.boss : null;
+  }
+
   /** Put a bug straight onto a plot — used to restore a saved infestation. */
   spawnAttached(specId, plotIndex) {
-    const spec = BUGS_BY_ID[specId] || BUGS_BY_ID.aphid;
+    const spec = BUGS_BY_ID[specId] || (specId?.startsWith('boss_')
+      ? bossOf(BUGS_BY_ID[specId.slice(5)] || BUGS_BY_ID.aphid) : BUGS_BY_ID.aphid);
     const cell = this.hooks.plotCells()[plotIndex];
     const a = Math.random() * Math.PI * 2;
     const bug = this.spawn(spec, cell.x + Math.cos(a) * 0.8, cell.z + Math.sin(a) * 0.8, plotIndex);

@@ -3,11 +3,12 @@
 import * as THREE from 'three';
 import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollPack, plotCost, PLOT_COUNT, refundValue, SEED_REFUND,
          CANS_BY_ID, SPRINKLERS_BY_ID, TURRETS_BY_ID, WEAPONS_BY_ID, plotLayout,
-         raidLevel, BUG_SLOW } from './data.js';
+         raidLevel, BUG_SLOW, TROPHIES, goldenMultiplier } from './data.js';
 import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount,
          growth, isRipe, isRegrowing, harvestsLeft, cycleSeconds,
          refreshSprinklers, plotSpeed, sprinklerSpeed, sprinklerAt, stockCount, addSprinkler, takeSprinkler,
-         bestCan, bugsOn, addBug, removeBug, turretAt, deviceAt } from './state.js';
+         bestCan, bugsOn, addBug, removeBug, turretAt, deviceAt,
+         cropValue, goldenPending, canGoldenHarvest, goldenHarvest, claimTrophies } from './state.js';
 import { buildWorld } from './world.js';
 import { buildPlant, animatePlant } from './plants.js';
 import { buildSprinkler, animateSprinkler, buildCan, waterBurst,
@@ -19,6 +20,9 @@ import { GamepadInput, BTN } from './gamepad.js';
 import { BugSystem } from './bugs.js';
 import { renderPadTest } from './padtest.js';
 import { BUILD_LABEL } from './build.js';
+
+let menuSuppressUntil = 0;
+let escClosedShop = false;
 
 const REACH = 6.5;
 const NAV_FIRST = 0.36;   // hold-to-repeat timings for stick/d-pad menu navigation
@@ -53,6 +57,7 @@ const ui = new UI({
     ui.refresh();
     ui.toast('Backup restored — welcome back.', 'gold');
   },
+  goldenHarvest: () => doGoldenHarvest(),
   toggleShovel: () => toggleShovel(),
   toggleWeapon: () => toggleWeapon(),
   buyWeapon: id => buyWeapon(id),
@@ -64,8 +69,13 @@ const ui = new UI({
   sellSeed: (id, all) => sellSeed(id, all),
   buyPack: id => buyPack(id),
   onShopToggle: open => {
-    if (open) document.exitPointerLock?.();
-    else player.requestLock();
+    if (open) { document.exitPointerLock?.(); return; }
+    // Closing: never bounce straight to the pause menu, and don't grab the
+    // pointer back when Escape did the closing — browsers throttle that, and
+    // a second Escape would then land in the menu.
+    menuSuppressUntil = performance.now() + 700;
+    if (!escClosedShop) player.requestLock();
+    escClosedShop = false;
   },
 });
 
@@ -292,7 +302,8 @@ function harvest(index) {
   const plot = state.plots[index];
   if (!plot || !isRipe(plot, index)) return;
   const p = PLANTS_BY_ID[plot.plantId];
-  earn(p.sell);
+  const paid = cropValue(p);
+  earn(paid);
   state.stats.harvested++;
 
   // Multi-harvest crops stay in the ground and start a (faster) regrow cycle.
@@ -306,7 +317,7 @@ function harvest(index) {
   const note = p.harvests === 1 ? ''
     : left > 0 ? ` <span style="opacity:.7">· regrows, ${left} left</span>`
     : ` <span style="opacity:.7">· plant is spent</span>`;
-  ui.toast(`Harvested ${p.name} &nbsp;<b class="coin">+₪${fmt(p.sell)}</b>${note}`, 'gold');
+  ui.toast(`Harvested ${p.name} &nbsp;<b class="coin">+₪${fmt(paid)}</b>${note}`, 'gold');
   sfx.harvest(TIERS[p.tier].order);
   gamepad.rumble(0.25 + TIERS[p.tier].order * 0.08, 90 + TIERS[p.tier].order * 20);
   ui.refresh();
@@ -478,9 +489,20 @@ const bugs = new BugSystem(scene, {
   onDetach: (index, specId) => { removeBug(index, specId); },
   onKill: bug => {
     earn(bug.spec.bounty);
+    state.stats.bugsKilled++;
     burst({ x: bug.mesh.position.x, z: bug.mesh.position.z }, bug.spec.color);
-    sfx.squish();
+    if (bug.spec.boss) {
+      state.stats.bossesKilled++;
+      for (let i = 0; i < 5; i++) burst({ x: bug.mesh.position.x, z: bug.mesh.position.z }, 0xffd54f);
+      ui.toast(`💥 <b>${bug.spec.name} defeated!</b> +₪${fmt(bug.spec.bounty)}`, 'gold');
+      sfx.pack(6);
+      gamepad.rumble(0.8, 500);
+      ui.setBoss(null);
+    } else {
+      sfx.squish();
+    }
     ui.refresh();
+    save();
   },
 });
 
@@ -501,6 +523,21 @@ function startRaid() {
   const planted = state.plots.filter(Boolean).length;
   if (!planted) { scheduleRaid(); return; }
   const level = raidLevel(state.owned, state.discovered);
+
+  // Every fourth raid, once the garden is worth raiding, sends a monster.
+  state.raidCount = (state.raidCount || 0) + 1;
+  if (level >= 2 && state.raidCount % 4 === 0 && !bugs.activeBoss) {
+    const boss = bugs.spawnBoss(level);
+    if (boss) {
+      ui.toast(`💀 <b>${boss.spec.name} is coming!</b>`, 'bad');
+      sfx.raid();
+      gamepad.rumble(0.9, 600);
+      scheduleRaid();
+      save();
+      return;
+    }
+  }
+
   const n = Math.min(12, 2 + Math.floor(level * 1.4) + Math.floor(Math.random() * 3));
   const sent = bugs.spawnWave(n, level);
   if (sent) {
@@ -679,7 +716,7 @@ function updatePrompt() {
       const after = picks - 1;
       const more = p.harvests === 1 ? '' :
         after > 0 ? ` · regrows ${after} more time${after === 1 ? '' : 's'}` : ' · last picking';
-      ui.setPrompt(`<b>[E]</b> Harvest ${p.name} — <span class="coin">₪${fmt(p.sell)}</span>
+      ui.setPrompt(`<b>[E]</b> Harvest ${p.name} — <span class="coin">₪${fmt(cropValue(p))}</span>
         <span class="sub" style="color:${TIERS[p.tier].css}">${TIERS[p.tier].name}${more}</span>`);
     } else {
       const wait = Math.ceil(cycleSeconds(plot, i) * (1 - growth(plot, i)));
@@ -736,7 +773,9 @@ window.addEventListener('keydown', e => {
       break;
     }
     case 'Escape':
-      if (ui.shopOpen) { ui.toggleShop(false); e.preventDefault(); }
+      if (ui.packOpen) { ui.closePack(); menuSuppressUntil = performance.now() + 700; e.preventDefault(); }
+      else if (ui.shopOpen) { escClosedShop = true; ui.toggleShop(false); e.preventDefault(); }
+      else if (!ui.menuOpen) { document.exitPointerLock?.(); ui.showMenu(true); }
       break;
     case 'KeyQ': ui.cycleSelection(-1); break;
     case 'KeyP': togglePadTest(); break;
@@ -749,9 +788,10 @@ window.addEventListener('keydown', e => {
 });
 
 document.addEventListener('pointerlockchange', () => {
-  if (!document.pointerLockElement && !ui.shopOpen && document.getElementById('packmodal').classList.contains('hidden')) {
-    ui.showMenu(true);
-  }
+  if (document.pointerLockElement) return;
+  if (ui.shopOpen || ui.packOpen) return;
+  if (performance.now() < menuSuppressUntil) return;   // just closed a panel
+  ui.showMenu(true);
 });
 
 canvas.addEventListener('click', () => {
@@ -867,6 +907,30 @@ function toggleCan(force) {
   return on;
 }
 
+function doGoldenHarvest() {
+  if (!canGoldenHarvest()) return;
+  const gained = goldenHarvest();
+  bugs.clear();
+  syncAllPlots(true);
+  ui.toggleShop(false);
+  ui.refresh();
+  ui.toast(`🌟 <b>Golden Harvest!</b> +${gained} Golden Seeds — every crop is now worth ${goldenMultiplier(state.golden).toFixed(1)}× more`, 'gold');
+  sfx.pack(7);
+  gamepad.rumble(0.9, 700);
+  save();
+}
+
+let trophyClock = 0;
+function checkTrophies(dt) {
+  trophyClock += dt;
+  if (trophyClock < 1) return;
+  trophyClock = 0;
+  for (const t of claimTrophies()) {
+    ui.toast(`🏆 <b>${t.name}</b> — ${t.hint}${t.golden ? ` · +${t.golden} Golden Seeds` : ` · +₪${fmt(t.reward)}`}`, 'gold');
+    sfx.pack(3);
+  }
+}
+
 function bestWeapon() {
   return WEAPONS_BY_ID[[...Object.keys(state.weapons)]
     .sort((a, b) => WEAPONS_BY_ID[b].damage - WEAPONS_BY_ID[a].damage)[0]] || null;
@@ -919,6 +983,9 @@ function tick() {
   if (player.weapon && using) fireWeapon();
   player.swing = Math.max(0, player.swing - dt * 4);
   ui.setBugCount(bugs.count);
+  const boss = bugs.activeBoss;
+  ui.setBoss(boss ? { name: boss.spec.name, hp: boss.hp, maxHp: boss.maxHp } : null);
+  checkTrophies(dt);
   if (!padTestEl.classList.contains('hidden')) {
     padTestClock += dt;
     if (padTestClock > 0.08) { padTestClock = 0; renderPadTest(padTestEl, gamepad); }
@@ -958,7 +1025,7 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { build: BUILD_LABEL, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
+window.game = { build: BUILD_LABEL, doGoldenHarvest, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
                 placeSprinkler, buyWeapon, buyTurret, placeTurret, bugs, startRaid, fireWeapon,
                 waterPlot, refreshSprinklers, plotSpeed, state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
 

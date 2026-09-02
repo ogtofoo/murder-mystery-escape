@@ -2,7 +2,8 @@
 
 import { PLOT_COUNT, PLANTS_BY_ID, plotCost, plotLayout, LAYOUT_ID,
          CANS, CANS_BY_ID, SPRINKLERS_BY_ID, TURRETS_BY_ID, WEAPONS_BY_ID,
-         BUGS_BY_ID, BUG_SLOW } from './data.js';
+         BUGS_BY_ID, BUG_SLOW, TROPHIES, goldenFor, goldenMultiplier,
+         GOLDEN_MIN_EARNED } from './data.js';
 
 const SAVE_KEY = 'sheckle-garden-save-v1';
 export const SAVE_VERSION = 2;
@@ -22,7 +23,11 @@ function freshState() {
     nextRaid: 0,                                  // when the next bug raid is due
     stock: {},                                    // sprinklers bought but not yet placed
     cans: {},                                     // watering cans owned
-    stats: { harvested: 0, earned: 0, packsOpened: 0, best: null },
+    stats: { harvested: 0, earned: 0, packsOpened: 0, best: null, bugsKilled: 0, bossesKilled: 0 },
+    golden: 0,          // Golden Seeds kept through every Golden Harvest
+    prestiges: 0,       // how many times the garden has been replanted
+    runEarned: 0,       // earnings since the last Golden Harvest
+    trophies: {},       // claimed trophy ids
   };
 }
 
@@ -52,6 +57,13 @@ function sanitize(raw) {
     if (PLANTS_BY_ID[id]) s.discovered[id] = true;
   }
   for (const id of Object.keys(s.seeds)) s.discovered[id] = true;
+
+  s.golden = Number.isFinite(raw.golden) ? Math.max(0, Math.floor(raw.golden)) : 0;
+  s.prestiges = Number.isFinite(raw.prestiges) ? Math.max(0, Math.floor(raw.prestiges)) : 0;
+  // Saves from before Golden Harvest count everything earned so far as this run.
+  s.runEarned = Number.isFinite(raw.runEarned) ? Math.max(0, raw.runEarned) : (s.stats.earned || 0);
+  s.trophies = {};
+  for (const t of TROPHIES) if (raw.trophies?.[t.id]) s.trophies[t.id] = true;
 
   s.cans = {};
   for (const id of Object.keys(raw.cans || {})) if (CANS_BY_ID[id]) s.cans[id] = true;
@@ -175,6 +187,70 @@ export function spend(amount) {
 export function earn(amount) {
   state.money += amount;
   state.stats.earned += amount;
+  state.runEarned += amount;
+}
+
+/** What a crop is worth right now, with Golden Seeds counted in. */
+export function cropValue(plant) {
+  return Math.floor(plant.sell * goldenMultiplier(state.golden));
+}
+
+// ---- Golden Harvest ---------------------------------------------------
+
+/** Golden Seeds this run would pay out. */
+export function goldenPending() { return goldenFor(state.runEarned); }
+
+export function canGoldenHarvest() {
+  return state.owned >= PLOT_COUNT && state.runEarned >= GOLDEN_MIN_EARNED && goldenPending() > 0;
+}
+
+/**
+ * Replant everything from scratch in exchange for Golden Seeds. Tools, the
+ * almanac, trophies and anything in the shed are kept — only the garden and
+ * your sheckles go back to the start.
+ */
+export function goldenHarvest() {
+  if (!canGoldenHarvest()) return 0;
+  const gained = goldenPending();
+  state.golden += gained;
+  state.prestiges += 1;
+
+  // Placed devices come back to the shed rather than being lost.
+  for (let i = 0; i < PLOT_COUNT; i++) {
+    for (const list of [state.sprinklers, state.turrets]) {
+      if (list[i]) { state.stock[list[i]] = (state.stock[list[i]] || 0) + 1; list[i] = null; }
+    }
+  }
+
+  state.money = 1;
+  state.seeds = {};
+  state.plots = new Array(PLOT_COUNT).fill(null);
+  state.owned = 1;
+  state.runEarned = 0;
+  state.nextRaid = 0;
+  refreshSprinklers();
+  return gained;
+}
+
+// ---- Trophies ---------------------------------------------------------
+
+/** Trophies newly completed since last checked, marked as claimed. */
+export function claimTrophies() {
+  const won = [];
+  for (const t of TROPHIES) {
+    if (state.trophies[t.id]) continue;
+    if (t.at(state) >= t.goal) {
+      state.trophies[t.id] = true;
+      if (t.reward) earn(t.reward);
+      if (t.golden) state.golden += t.golden;
+      won.push(t);
+    }
+  }
+  return won;
+}
+
+export function trophyProgress(t) {
+  return Math.min(1, t.at(state) / t.goal);
 }
 
 export function nextPlotCost() { return plotCost(state.owned); }

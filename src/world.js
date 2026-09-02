@@ -194,8 +194,9 @@ function buildStall() {
     new THREE.PlaneGeometry(3.4, 0.9),
     new THREE.MeshBasicMaterial({ map: signTexture(), transparent: true, side: THREE.DoubleSide })
   );
+  // The stall is turned to face the garden, so the sign faces +Z locally.
+  // Rotating it would mirror the lettering — leave it be.
   sign.position.set(0, 1.95, 0.62);
-  sign.rotation.y = Math.PI;
   g.add(sign);
 
   // Crates of seed packs on the counter.

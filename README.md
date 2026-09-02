@@ -131,6 +131,29 @@ Soil under a sprinkler reads darker, and the growth prompt shows the multiplier.
 
 The shovel picks a sprinkler back up and returns it to your shed, so moving one costs nothing.
 
+### ✨ Golden Harvest — the endgame
+
+Once every plot is tilled and you've earned ₪100T in a run, the shop's **Golden** tab offers a
+Golden Harvest: plough the whole garden under and start over, keeping **Golden Seeds** worth
+√(earnings ÷ ₪1T). Every Golden Seed makes **every crop you ever sell 5% more valuable,
+forever** — a run worth ₪200Qa pays 447 seeds, which is 23× on every harvest after it.
+
+You keep your almanac, your trophies, your tools and weapons, and every sprinkler and turret
+goes back to your shed. Only sheckles, seeds and land start over — so the second run flies by,
+and the third flies by faster still.
+
+### 🏆 Trophies
+
+Sixteen goals with rewards paid the instant you finish them — harvest counts, land, species
+discovered, bugs squashed, MEGA bugs beaten, sprinklers and turrets running, and Golden
+Harvests done. The **Trophies** tab shows a progress bar for every one still open.
+
+### 💀 MEGA bugs
+
+Every fourth raid sends a boss instead of a swarm: one enormous horned bug with 45× the health,
+its own health bar across the top of the screen, and a bounty 70× the usual. Beating your first
+one is a trophy; beating ten is a much bigger one.
+
 ### Bugs, weapons and turrets
 
 Every few minutes a **bug raid** crosses the field toward your crops. A bug that reaches a plot

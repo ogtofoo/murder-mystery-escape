@@ -9,7 +9,7 @@ const SPRINT = 9.0;
 const GRAVITY = 22;
 const JUMP = 8.0;
 const EYE = 1.62;
-const FOV_FIRST = 90;    // roomier when you're inside the gardener's head
+const FOV_FIRST = 103;   // roomier when you're inside the gardener's head
 const FOV_THIRD = 72;
 const WORLD_RADIUS = 72;
 

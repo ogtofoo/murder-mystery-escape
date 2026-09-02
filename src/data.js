@@ -163,6 +163,62 @@ export function rollBug(level) {
   return pool[pool.length - 1];
 }
 
+// ---- Golden Harvest (prestige) ----------------------------------------
+
+/** Each Golden Seed adds this much to every crop's sale value, forever. */
+export const GOLDEN_BONUS = 0.05;
+
+/** You can replant the garden once you own every plot and have earned this. */
+export const GOLDEN_MIN_EARNED = 1e14;
+
+/** Golden Seeds a run is worth. */
+export function goldenFor(earned) {
+  return Math.max(0, Math.floor(Math.sqrt(Math.max(0, earned) / 1e12)));
+}
+
+/** Multiplier on every harvest from the Golden Seeds you hold. */
+export function goldenMultiplier(golden) {
+  return 1 + GOLDEN_BONUS * (golden || 0);
+}
+
+// ---- Boss bugs ---------------------------------------------------------
+
+/** Turn an ordinary species into the monster version of itself. */
+export function bossOf(spec) {
+  return {
+    ...spec,
+    id: 'boss_' + spec.id,
+    name: 'MEGA ' + spec.name.toUpperCase(),
+    hp: spec.hp * 45,
+    speed: spec.speed * 0.55,
+    size: spec.size * 2.8,
+    bounty: spec.bounty * 70,
+    boss: true,
+  };
+}
+
+// ---- Trophies ----------------------------------------------------------
+
+/** Goals with a one-off reward. `at` reads the save; `goal` is the target. */
+export const TROPHIES = [
+  { id:'sprout',    name:'First Sprout',     hint:'Harvest your first crop',        goal:1,     at:s => s.stats.harvested,  reward:50 },
+  { id:'green',     name:'Green Thumb',      hint:'Harvest 100 crops',              goal:100,   at:s => s.stats.harvested,  reward:5000 },
+  { id:'farmhand',  name:'Farm Hand',        hint:'Harvest 1,000 crops',            goal:1000,  at:s => s.stats.harvested,  reward:2e6 },
+  { id:'tycoon',    name:'Crop Tycoon',      hint:'Harvest 10,000 crops',           goal:10000, at:s => s.stats.harvested,  reward:5e9 },
+  { id:'land10',    name:'Landowner',        hint:'Till 10 plots',                  goal:10,    at:s => s.owned,            reward:12000 },
+  { id:'land36',    name:'Whole Field',      hint:'Till every plot',                goal:36,    at:s => s.owned,            reward:2e7 },
+  { id:'collect12', name:'Collector',        hint:'Discover 12 species',            goal:12,    at:s => Object.keys(s.discovered).length, reward:150000 },
+  { id:'collect24', name:'Master Gardener',  hint:'Discover every species',         goal:24,    at:s => Object.keys(s.discovered).length, reward:2e8 },
+  { id:'squash10',  name:'Pest Control',     hint:'Squash 10 bugs',                 goal:10,    at:s => s.stats.bugsKilled, reward:8000 },
+  { id:'squash250', name:'Exterminator',     hint:'Squash 250 bugs',                goal:250,   at:s => s.stats.bugsKilled, reward:8e6 },
+  { id:'boss1',     name:'Boss Slayer',      hint:'Beat a MEGA bug',                goal:1,     at:s => s.stats.bossesKilled, reward:1e8 },
+  { id:'boss10',    name:'Monster Hunter',   hint:'Beat 10 MEGA bugs',              goal:10,    at:s => s.stats.bossesKilled, reward:5e11 },
+  { id:'spr5',      name:'Sprinkler City',   hint:'Have 5 sprinklers running',      goal:5,     at:s => s.sprinklers.filter(Boolean).length, reward:3e6 },
+  { id:'tur3',      name:'Fort Garden',      hint:'Have 3 turrets running',         goal:3,     at:s => s.turrets.filter(Boolean).length, reward:5e9 },
+  { id:'golden1',   name:'Golden Touch',     hint:'Do one Golden Harvest',          goal:1,     at:s => s.prestiges, reward:0, golden:5 },
+  { id:'golden10',  name:'Living Legend',    hint:'Do 10 Golden Harvests',          goal:10,    at:s => s.prestiges, reward:0, golden:100 },
+];
+
 export const PACKS = [
   { id:'sprout',   name:'Sprout Pack',    cost:900,   seeds:3, weights:{ common:55, uncommon:33, rare:11, legendary:1 } },
   { id:'garden',   name:'Garden Pack',    cost:90000, seeds:3, weights:{ uncommon:44, rare:40, legendary:14, mythic:2 } },

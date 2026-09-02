@@ -2,8 +2,9 @@
 
 import { PLANTS, PLANTS_BY_ID, PACKS, TIERS, TIER_ORDER, PLOT_COUNT, fmt, refundValue, SEED_REFUND,
          CANS, SPRINKLERS, SPRINKLERS_BY_ID, sprinklerCoverage,
-         WEAPONS, TURRETS, TURRETS_BY_ID } from './data.js';
-import { state, seedCount, stockCount } from './state.js';
+         WEAPONS, TURRETS, TURRETS_BY_ID, TROPHIES, GOLDEN_BONUS, GOLDEN_MIN_EARNED,
+         goldenMultiplier } from './data.js';
+import { state, seedCount, stockCount, goldenPending, canGoldenHarvest, trophyProgress, cropValue } from './state.js';
 
 const $ = sel => document.querySelector(sel);
 
@@ -25,6 +26,7 @@ export class UI {
       hotbar: $('#hotbar'), prompt: $('#prompt'), toasts: $('#toasts'),
       shop: $('#shop'), body: $('#shopbody'), overlay: $('#overlay'), plotline: $('#plotline'),
       packmodal: $('#packmodal'), packcards: $('#packcards'), packtitle: $('#packtitle'),
+      bossbar: $('#bossbar'), goldenline: $('#goldenline'),
     };
 
     $('#playbtn').addEventListener('click', () => this.hooks.play());
@@ -67,6 +69,9 @@ export class UI {
     this.el.money.textContent = fmt(state.money);
     this.el.shopmoney.textContent = fmt(state.money);
     this.el.plotline.textContent = `${state.owned} / ${PLOT_COUNT} plots tilled`;
+    const mult = goldenMultiplier(state.golden);
+    this.el.goldenline.classList.toggle('hidden', !state.golden);
+    this.el.goldenline.textContent = `✨ ${state.golden} Golden Seeds · ${mult.toFixed(1)}× crop value`;
     this.renderHotbar();
     if (this.shopOpen) this.renderShop();
   }
@@ -106,6 +111,16 @@ export class UI {
   setWeapon(id) {
     this.weaponOut = id;
     this.renderHotbar();
+  }
+
+  /** @param boss {{name, hp, maxHp}|null} */
+  setBoss(boss) {
+    const on = !!boss;
+    this.el.bossbar.classList.toggle('hidden', !on);
+    if (!on) return;
+    this.el.bossbar.querySelector('.bossname').textContent = boss.name;
+    this.el.bossbar.querySelector('.bosstrack i').style.width =
+      `${Math.max(0, (boss.hp / boss.maxHp) * 100)}%`;
   }
 
   setBugCount(n) {
@@ -194,6 +209,8 @@ export class UI {
     if (this.tab === 'seeds') this.renderSeeds();
     else if (this.tab === 'packs') this.renderPacks();
     else if (this.tab === 'tools') this.renderTools();
+    else if (this.tab === 'trophies') this.renderTrophies();
+    else if (this.tab === 'golden') this.renderGolden();
     else this.renderAlmanac();
     this.applyFocus();
   }
@@ -378,6 +395,67 @@ export class UI {
     }
   }
 
+  renderTrophies() {
+    const done = TROPHIES.filter(t => state.trophies[t.id]).length;
+    let html = `<div class="tierhead">${done} of ${TROPHIES.length} trophies earned — rewards are paid the moment you finish one</div>`;
+    for (const t of TROPHIES) {
+      const got = !!state.trophies[t.id];
+      const k = trophyProgress(t);
+      const now = Math.min(t.at(state), t.goal);
+      html += `<div class="trophy ${got ? 'done' : ''}">
+        <div class="mark">${got ? '🏆' : '◻'}</div>
+        <div>
+          <div class="nm">${t.name}</div>
+          <div class="hint">${t.hint} — ${fmt(now)} / ${fmt(t.goal)}</div>
+          ${got ? '' : `<div class="track"><i style="width:${(k * 100).toFixed(0)}%"></i></div>`}
+        </div>
+        <div class="prize">${t.golden ? `✨ ${t.golden}` : `₪${fmt(t.reward)}`}</div>
+      </div>`;
+    }
+    this.el.body.innerHTML = html;
+  }
+
+  renderGolden() {
+    const pending = goldenPending();
+    const ready = canGoldenHarvest();
+    const now = goldenMultiplier(state.golden);
+    const after = goldenMultiplier(state.golden + pending);
+    this.el.body.innerHTML = `
+      <div class="goldbox">
+        <h3>✨ Golden Harvest</h3>
+        <p>Plough the whole garden back under and start again — but keep a handful of
+           <b>Golden Seeds</b> from everything you grew. Every Golden Seed makes
+           <b>every crop you ever sell worth ${Math.round(GOLDEN_BONUS * 100)}% more</b>, forever.</p>
+        <div class="big">${pending > 0 ? '+' + fmt(pending) : '0'}</div>
+        <div>Golden Seeds waiting for you</div>
+        <p>You have <b>${fmt(state.golden)}</b> (${now.toFixed(1)}× crop value).
+           Harvesting now takes you to <b>${fmt(state.golden + pending)}</b> —
+           <b style="color:var(--gold)">${after.toFixed(1)}× on every crop</b>.</p>
+        <div class="keep">
+          <span>✔ keeps your almanac</span>
+          <span>✔ keeps trophies</span>
+          <span>✔ keeps tools &amp; weapons</span>
+          <span>✔ sprinklers &amp; turrets go back to your shed</span>
+          <span>✘ sheckles, seeds and land start over</span>
+        </div>
+        <button class="goldbtn" id="goldbtn" ${ready ? '' : 'disabled'}>
+          ${ready ? `Golden Harvest — take ${fmt(pending)} seeds` : 'Not ready yet'}
+        </button>
+        ${ready ? '' : `<p class="dim" style="font-size:12px">Needs all ${PLOT_COUNT} plots tilled
+           (you have ${state.owned}) and ₪${fmt(GOLDEN_MIN_EARNED)} earned this run
+           (you have ₪${fmt(state.runEarned)}).</p>`}
+        <p style="font-size:12px;opacity:.6">Golden Harvests done: ${fmt(state.prestiges)}</p>
+      </div>`;
+    const btn = this.el.body.querySelector('#goldbtn');
+    if (btn && ready) {
+      btn.addEventListener('click', () => {
+        if (confirm(`Replant the whole garden for ${pending} Golden Seeds?\n\nYou keep your almanac, trophies, tools and shed.`)) {
+          this.hooks.goldenHarvest();
+        }
+      });
+    }
+  }
+
   renderAlmanac() {
     const found = PLANTS.filter(p => state.discovered[p.id]).length;
     let html = `<div class="tierhead">Discovered ${found} / ${PLANTS.length} species ·
@@ -391,7 +469,7 @@ export class UI {
           <div class="stripe" style="background:${TIERS[tier].css}"></div>
           <div>
             <div class="name">${known ? p.name : '???'}</div>
-            <div class="meta">${known ? `${harvestLine(p)} · seed ₪${fmt(p.cost)}` : 'undiscovered — try a seed pack'}</div>
+            <div class="meta">${known ? `${harvestLine(p)} · seed ₪${fmt(p.cost)}${state.golden ? ` · <b style="color:var(--gold)">sells for ₪${fmt(cropValue(p))} with Golden Seeds</b>` : ''}` : 'undiscovered — try a seed pack'}</div>
           </div>
           <div class="own">${known ? `×${seedCount(p.id)}` : ''}</div><div></div>
         </div>`;
