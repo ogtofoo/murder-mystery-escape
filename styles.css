@@ -84,6 +84,12 @@ kbd {
 }
 .digbar i { display: block; height: 100%; background: var(--gold); transition: width 0.05s linear; }
 
+#bugcount {
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+  background: rgba(60, 16, 16, 0.92); border: 1px solid rgba(255, 123, 107, 0.5);
+  color: #ffd9d2; border-radius: 12px; padding: 8px 18px; font-size: 15px;
+  box-shadow: 0 8px 26px rgba(0,0,0,0.4); animation: pop 0.25s ease both;
+}
 #toasts {
   position: absolute; top: 90px; left: 18px; display: flex; flex-direction: column; gap: 6px;
 }

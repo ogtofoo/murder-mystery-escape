@@ -1,7 +1,8 @@
 // Persistent game state: money, seeds, owned plots, planted crops.
 
 import { PLOT_COUNT, PLANTS_BY_ID, plotCost, plotLayout, LAYOUT_ID,
-         CANS, CANS_BY_ID, SPRINKLERS_BY_ID } from './data.js';
+         CANS, CANS_BY_ID, SPRINKLERS_BY_ID, TURRETS_BY_ID, WEAPONS_BY_ID,
+         BUGS_BY_ID, BUG_SLOW } from './data.js';
 
 const SAVE_KEY = 'sheckle-garden-save-v1';
 export const SAVE_VERSION = 2;
@@ -16,6 +17,9 @@ function freshState() {
     owned: 1,                       // number of unlocked plots (first N of plotOrder)
     plots: new Array(PLOT_COUNT).fill(null),      // { plantId, plantedAt, taken, watered }
     sprinklers: new Array(PLOT_COUNT).fill(null), // sprinkler id sitting on each plot
+    turrets: new Array(PLOT_COUNT).fill(null),    // turret id sitting on each plot
+    weapons: {},                                  // weapons owned
+    nextRaid: 0,                                  // when the next bug raid is due
     stock: {},                                    // sprinklers bought but not yet placed
     cans: {},                                     // watering cans owned
     stats: { harvested: 0, earned: 0, packsOpened: 0, best: null },
@@ -57,6 +61,14 @@ function sanitize(raw) {
     if (SPRINKLERS_BY_ID[id] && Number.isFinite(n) && n > 0) s.stock[id] = Math.floor(n);
   }
 
+  s.weapons = {};
+  for (const id of Object.keys(raw.weapons || {})) if (WEAPONS_BY_ID[id]) s.weapons[id] = true;
+
+  const rawTur = Array.isArray(raw.turrets) ? raw.turrets : [];
+  s.turrets = new Array(PLOT_COUNT).fill(null)
+    .map((_, i) => (TURRETS_BY_ID[rawTur[i]] ? rawTur[i] : null));
+  s.nextRaid = Number.isFinite(raw.nextRaid) ? raw.nextRaid : 0;
+
   const rawSpr = Array.isArray(raw.sprinklers) ? raw.sprinklers : [];
   s.sprinklers = new Array(PLOT_COUNT).fill(null)
     .map((_, i) => (SPRINKLERS_BY_ID[rawSpr[i]] ? rawSpr[i] : null));
@@ -68,6 +80,8 @@ function sanitize(raw) {
     const taken = Number.isFinite(p.taken) ? Math.min(Math.max(0, Math.floor(p.taken)), plant.harvests - 1) : 0;
     // A clock set backwards shouldn't leave a crop growing forever.
     const out = { plantId: p.plantId, plantedAt: Math.min(p.plantedAt, Date.now()), taken, watered: !!p.watered };
+    // Bugs left chewing when you quit are still there when you come back.
+    if (Array.isArray(p.bugs)) out.bugs = p.bugs.filter(id => BUGS_BY_ID[id]).slice(0, 12);
     if (Number.isFinite(p.x) && Number.isFinite(p.z)) { out.x = p.x; out.z = p.z; }
     return out;
   };
@@ -186,8 +200,38 @@ export function refreshSprinklers() {
   return speeds;
 }
 
-/** Growth multiplier on a plot from whatever sprinklers reach it. */
-export function plotSpeed(index) { return speeds[index] ?? 1; }
+/** Bugs currently chewing on this plot. */
+export function bugsOn(index) { return state.plots[index]?.bugs?.length || 0; }
+
+/** Net growth multiplier: sprinklers speed a plot up, bugs drag it down. */
+export function plotSpeed(index) {
+  return (speeds[index] ?? 1) / (1 + BUG_SLOW * bugsOn(index));
+}
+
+/** Sprinkler-only multiplier, for showing the two effects separately. */
+export function sprinklerSpeed(index) { return speeds[index] ?? 1; }
+
+export function addBug(index, specId) {
+  const plot = state.plots[index];
+  if (!plot) return false;
+  (plot.bugs ||= []).push(specId);
+  return true;
+}
+
+export function removeBug(index, specId) {
+  const plot = state.plots[index];
+  if (!plot?.bugs?.length) return;
+  const i = plot.bugs.indexOf(specId);
+  plot.bugs.splice(i < 0 ? 0 : i, 1);
+  if (!plot.bugs.length) delete plot.bugs;
+}
+
+export function turretAt(index) { return TURRETS_BY_ID[state.turrets[index]] || null; }
+
+/** Any device standing on this plot blocks planting. */
+export function deviceAt(index) {
+  return SPRINKLERS_BY_ID[state.sprinklers[index]] || TURRETS_BY_ID[state.turrets[index]] || null;
+}
 
 /** The sprinkler standing on this plot, if any. */
 export function sprinklerAt(index) { return SPRINKLERS_BY_ID[state.sprinklers[index]] || null; }

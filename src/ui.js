@@ -1,7 +1,8 @@
 // All DOM overlay logic: wallet, hotbar, shop, pack reveals, toasts, menu.
 
 import { PLANTS, PLANTS_BY_ID, PACKS, TIERS, TIER_ORDER, PLOT_COUNT, fmt, refundValue, SEED_REFUND,
-         CANS, SPRINKLERS, SPRINKLERS_BY_ID, sprinklerCoverage } from './data.js';
+         CANS, SPRINKLERS, SPRINKLERS_BY_ID, sprinklerCoverage,
+         WEAPONS, TURRETS, TURRETS_BY_ID } from './data.js';
 import { state, seedCount, stockCount } from './state.js';
 
 const $ = sel => document.querySelector(sel);
@@ -14,6 +15,8 @@ export class UI {
     this.tab = 'seeds';
     this.shovelOut = false;
     this.canOut = false;
+    this.weaponOut = null;
+    this.bugCount = 0;
     this.padActive = false;   // draws a focus ring once a controller is in use
     this.focusIndex = 0;
 
@@ -49,6 +52,7 @@ export class UI {
       const slot = e.target.closest('.slot');
       if (slot?.dataset.tool === 'shovel') this.hooks.toggleShovel();
       else if (slot?.dataset.tool === 'can') this.hooks.toggleCan();
+      else if (slot?.dataset.tool === 'weapon') this.hooks.toggleWeapon();
       else if (slot?.dataset.plant) this.select(slot.dataset.plant);
     });
   }
@@ -74,8 +78,8 @@ export class UI {
         const pa = PLANTS_BY_ID[a], pb = PLANTS_BY_ID[b];
         return TIERS[pa.tier].order - TIERS[pb.tier].order || pa.cost - pb.cost;
       });
-    const sprinklers = SPRINKLERS.filter(s => stockCount(s.id) > 0).map(s => s.id);
-    return [...seeds, ...sprinklers].slice(0, 9);
+    const devices = [...SPRINKLERS, ...TURRETS].filter(d => stockCount(d.id) > 0).map(d => d.id);
+    return [...seeds, ...devices].slice(0, 9);
   }
 
   /** Seeds and sprinklers both live in the hotbar. */
@@ -83,7 +87,9 @@ export class UI {
     const p = PLANTS_BY_ID[id];
     if (p) return { name: p.name, tier: p.tier, count: seedCount(id), sprinkler: false };
     const s = SPRINKLERS_BY_ID[id];
-    if (s) return { name: s.name.replace(' Sprinkler', ''), tier: s.tier, count: stockCount(id), sprinkler: true };
+    if (s) return { name: s.name.replace(' Sprinkler', ''), tier: s.tier, count: stockCount(id), sprinkler: true, glyph: '✳' };
+    const t = TURRETS_BY_ID[id];
+    if (t) return { name: t.name.replace(' Turret', ''), tier: t.tier, count: stockCount(id), sprinkler: true, glyph: '⌖' };
     return null;
   }
 
@@ -97,14 +103,33 @@ export class UI {
     this.renderHotbar();
   }
 
+  setWeapon(id) {
+    this.weaponOut = id;
+    this.renderHotbar();
+  }
+
+  setBugCount(n) {
+    if (n === this.bugCount) return;
+    this.bugCount = n;
+    const el = document.querySelector('#bugcount');
+    if (el) {
+      el.classList.toggle('hidden', n === 0);
+      el.innerHTML = `🐛 <b>${n}</b> bug${n === 1 ? '' : 's'} in the garden`;
+    }
+  }
+
   toolSlot() {
     const can = CANS.filter(c => state.cans[c.id]).pop();
-    return `<div class="slot tool ${this.shovelOut ? 'active' : ''}" data-tool="shovel">
-        <div class="glyph">⛏</div><div class="nm">Shovel</div><div class="key">G</div>
-      </div>` + (can ? `<div class="slot tool ${this.canOut ? 'active' : ''}" data-tool="can">
-        <div class="glyph">💧</div><div class="nm">${can.id === 'can_super' ? 'SUPER Can' : 'Can'}</div><div class="key">F</div>
-      </div>` : '');
+    const weapon = WEAPONS.filter(w => state.weapons[w.id]).pop();
+    const slot = (active, tool, glyph, name, key) =>
+      `<div class="slot tool ${active ? 'active' : ''}" data-tool="${tool}">
+         <div class="glyph">${glyph}</div><div class="nm">${name}</div><div class="key">${key}</div>
+       </div>`;
+    return slot(this.shovelOut, 'shovel', '⛏', 'Shovel', 'G')
+      + (can ? slot(this.canOut, 'can', '💧', can.id === 'can_super' ? 'SUPER Can' : 'Can', 'F') : '')
+      + (weapon ? slot(!!this.weaponOut, 'weapon', '⚔', weapon.name.replace(/^(SUPER |Bug |Pest )/, ''), 'R') : '');
   }
+
 
   renderHotbar() {
     const ids = this.hotbarSeeds();
@@ -117,7 +142,7 @@ export class UI {
     this.el.hotbar.innerHTML = ids.map((id, i) => {
       const it = this.itemInfo(id);
       return `<div class="slot ${id === this.selected ? 'active' : ''} ${it.sprinkler ? 'device' : ''}" data-plant="${id}">
-        <div class="dot" style="background:${TIERS[it.tier].css}">${it.sprinkler ? '<span>✳</span>' : ''}</div>
+        <div class="dot" style="background:${TIERS[it.tier].css}">${it.sprinkler ? `<span>${it.glyph}</span>` : ''}</div>
         <div class="nm">${it.name}</div>
         <div class="ct">×${it.count}</div>
         <div class="key">${i + 1}</div>
@@ -307,7 +332,44 @@ export class UI {
         <button class="buy" data-sprinkler="${s.id}" ${state.money < s.cost ? 'disabled' : ''}>₪ ${fmt(s.cost)}</button>
       </div>`;
     }
+    html += `<div class="tierhead">Weapons — bugs raid the garden and chew on your crops, slowing them down</div>`;
+    for (const w of WEAPONS) {
+      const owned = !!state.weapons[w.id];
+      const how = { melee: 'swing at anything close', spray: `sprays a ${w.splash}m cloud`,
+                    beam: 'hitscan, long range', chain: `arcs to ${w.chains} bugs at once` }[w.kind];
+      html += `<div class="row">
+        <div class="stripe" style="background:${TIERS[w.tier].css}"></div>
+        <div>
+          <div class="name">${w.name}</div>
+          <div class="meta"><b>${fmt(w.damage)} damage</b> every ${w.cooldown}s · range ${w.range}m · ${how}</div>
+        </div>
+        <div class="own">${owned ? 'owned' : ''}</div>
+        <button class="buy" data-weapon="${w.id}" ${owned || state.money < w.cost ? 'disabled' : ''}>
+          ${owned ? '✓ owned' : '₪ ' + fmt(w.cost)}</button>
+      </div>`;
+    }
+    html += `<div class="tierhead">Turrets — stand one on a plot and it shoots bugs for you, day and night</div>`;
+    for (const t of TURRETS) {
+      const have = stockCount(t.id);
+      const placed = state.turrets.filter(x => x === t.id).length;
+      html += `<div class="row">
+        <div class="stripe" style="background:${TIERS[t.tier].css}"></div>
+        <div>
+          <div class="name" style="color:${TIERS[t.tier].css}">${t.name}</div>
+          <div class="meta"><b>${fmt(t.damage)} damage</b> × ${t.rate}/s = ${fmt(t.damage * t.rate)} dps ·
+            ${t.range > 100 ? 'covers the entire garden' : `range ${t.range}m`} · takes up the plot it stands on</div>
+        </div>
+        <div class="own">${have ? `in shed<br><b>${have}</b>` : ''}${placed ? `<br>${placed} placed` : ''}</div>
+        <button class="buy" data-turret="${t.id}" ${state.money < t.cost ? 'disabled' : ''}>₪ ${fmt(t.cost)}</button>
+      </div>`;
+    }
     this.el.body.innerHTML = html;
+    for (const b of this.el.body.querySelectorAll('[data-weapon]')) {
+      b.addEventListener('click', () => this.hooks.buyWeapon(b.dataset.weapon));
+    }
+    for (const b of this.el.body.querySelectorAll('[data-turret]')) {
+      b.addEventListener('click', () => this.hooks.buyTurret(b.dataset.turret));
+    }
     for (const b of this.el.body.querySelectorAll('[data-can]')) {
       b.addEventListener('click', () => this.hooks.buyCan(b.dataset.can));
     }

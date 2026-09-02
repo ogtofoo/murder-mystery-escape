@@ -2,17 +2,21 @@
 
 import * as THREE from 'three';
 import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollPack, plotCost, PLOT_COUNT, refundValue, SEED_REFUND,
-         CANS_BY_ID, SPRINKLERS_BY_ID, plotLayout } from './data.js';
+         CANS_BY_ID, SPRINKLERS_BY_ID, TURRETS_BY_ID, WEAPONS_BY_ID, plotLayout,
+         raidLevel, BUG_SLOW } from './data.js';
 import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount,
          growth, isRipe, isRegrowing, harvestsLeft, cycleSeconds,
-         refreshSprinklers, plotSpeed, sprinklerAt, stockCount, addSprinkler, takeSprinkler, bestCan } from './state.js';
+         refreshSprinklers, plotSpeed, sprinklerSpeed, sprinklerAt, stockCount, addSprinkler, takeSprinkler,
+         bestCan, bugsOn, addBug, removeBug, turretAt, deviceAt } from './state.js';
 import { buildWorld } from './world.js';
 import { buildPlant, animatePlant } from './plants.js';
-import { buildSprinkler, animateSprinkler, buildCan, waterBurst } from './devices.js';
+import { buildSprinkler, animateSprinkler, buildCan, waterBurst,
+         buildTurret, animateTurret, buildWeapon, tracer } from './devices.js';
 import { Player } from './player.js';
 import { UI } from './ui.js';
 import { sfx } from './sfx.js';
 import { GamepadInput, BTN } from './gamepad.js';
+import { BugSystem } from './bugs.js';
 import { renderPadTest } from './padtest.js';
 import { BUILD_LABEL } from './build.js';
 
@@ -20,6 +24,8 @@ const REACH = 6.5;
 const NAV_FIRST = 0.36;   // hold-to-repeat timings for stick/d-pad menu navigation
 const NAV_REPEAT = 0.14;
 const DIG_TIME = 0.75;    // seconds of holding before a plant comes out
+const RAID_MIN = 150;     // seconds between bug raids
+const RAID_MAX = 300;
 const STALL_RANGE = 5.5;
 
 const canvas = document.getElementById('game');
@@ -33,19 +39,24 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 400);
 
 const world = buildWorld(scene);
-const player = new Player(scene, camera, canvas);
+const player = new Player(scene, camera, canvas, [world.stall]);
 
 const ui = new UI({
   play: () => startPlaying(),
-  reset: () => { resetSave(); syncAllPlots(true); ui.refresh(); ui.toast('Fresh soil. Good luck!', 'gold'); save(); },
+  reset: () => { resetSave(); refreshSprinklers(); restoreBugs(); syncAllPlots(true); ui.refresh(); ui.toast('Fresh soil. Good luck!', 'gold'); save(); },
   exportSave: () => downloadSave(),
   importSave: text => {
     importSave(text);
+    refreshSprinklers();
+    restoreBugs();
     syncAllPlots(true);
     ui.refresh();
     ui.toast('Backup restored — welcome back.', 'gold');
   },
   toggleShovel: () => toggleShovel(),
+  toggleWeapon: () => toggleWeapon(),
+  buyWeapon: id => buyWeapon(id),
+  buyTurret: id => buyTurret(id),
   toggleCan: () => toggleCan(),
   buyCan: id => buyCan(id),
   buySprinkler: id => buySprinkler(id),
@@ -123,6 +134,49 @@ function buySprinkler(id) {
   sfx.buy();
   ui.refresh();
   save();
+}
+
+function buyWeapon(id) {
+  const w = WEAPONS_BY_ID[id];
+  if (!w || state.weapons[id]) return;
+  if (!spend(w.cost)) { ui.toast('Not enough sheckles.', 'bad'); sfx.deny(); return; }
+  state.weapons[id] = true;
+  ui.toast(`Bought the ${w.name} — press <b>R</b> to arm it`, 'gold');
+  sfx.buy(); ui.refresh(); save();
+}
+
+function buyTurret(id) {
+  const t = TURRETS_BY_ID[id];
+  if (!t) return;
+  if (!spend(t.cost)) { ui.toast('Not enough sheckles.', 'bad'); sfx.deny(); return; }
+  addSprinkler(id, 1);            // shares the shed with sprinklers
+  ui.select(id);
+  ui.toast(`Bought a ${t.name} — place it on an empty plot`, 'gold');
+  sfx.buy(); ui.refresh(); save();
+}
+
+function placeTurret(index) {
+  const id = ui.selected;
+  const spec = TURRETS_BY_ID[id];
+  if (!spec || stockCount(id) <= 0) return;
+  if (state.plots[index] || deviceAt(index)) return;
+  takeSprinkler(id);
+  state.turrets[index] = id;
+  syncAllPlots();
+  ui.toast(`Placed a ${spec.name} — ${fmt(spec.damage)} damage, ${spec.rate}/s`, 'gold');
+  sfx.buy(); ui.refresh(); save();
+}
+
+function removeTurret(index) {
+  const id = state.turrets[index];
+  const spec = TURRETS_BY_ID[id];
+  if (!spec) return;
+  state.turrets[index] = null;
+  addSprinkler(id, 1);
+  syncAllPlots();
+  burst(world.plots[index], TIERS[spec.tier].color);
+  ui.toast(`Picked up the ${spec.name}`);
+  sfx.dig(); ui.refresh(); save();
 }
 
 function buyPack(packId) {
@@ -261,6 +315,7 @@ function harvest(index) {
 
 function digUp(index) {
   if (state.sprinklers[index]) { removeSprinkler(index); return; }
+  if (state.turrets[index]) { removeTurret(index); return; }
   const plot = state.plots[index];
   if (!plot) return;
   const p = PLANTS_BY_ID[plot.plantId];
@@ -286,7 +341,7 @@ let digProgress = 0;
 
 function updateDigging(holding) {
   const valid = player.shovel && target >= 0 && target < state.owned
-    && (state.plots[target] || state.sprinklers[target]);
+    && (state.plots[target] || deviceAt(target));
   if (!valid || !holding || ui.modalOpen) {
     if (digProgress > 0.15 && valid && !holding) sfx.deny();   // let go too early
     digIndex = -1;
@@ -326,8 +381,20 @@ function syncPlot(i) {
     view.cropAnchor.add(m);
     view.sprinkler = m;
   }
+  // Turret standing on this plot.
+  const turId = owned ? state.turrets[i] : null;
+  if (view.turret && view.turret.userData.spec.id !== turId) {
+    view.cropAnchor.remove(view.turret);
+    view.turret = null;
+  }
+  if (turId && !view.turret) {
+    const m = buildTurret(TURRETS_BY_ID[turId]);
+    view.cropAnchor.add(m);
+    view.turret = m;
+  }
+
   // Watered ground reads darker.
-  view.soil.material = owned && plotSpeed(i) > 1 ? wetSoilMat : world.soilMat;
+  view.soil.material = owned && sprinklerSpeed(i) > 1 ? wetSoilMat : world.soilMat;
 
   const data = state.plots[i];
   const wantId = owned && data ? data.plantId : null;
@@ -383,15 +450,138 @@ function burst(view, color) {
 function updateEffects(dt) {
   for (let i = effects.length - 1; i >= 0; i--) {
     const e = effects[i];
+    const ttl = e.ttl ?? 0.9;
     e.life += dt;
-    e.vel.y -= 9 * dt;
-    e.mesh.position.addScaledVector(e.vel, dt);
-    e.mesh.rotation.x += dt * 6; e.mesh.rotation.y += dt * 4;
-    e.mesh.material.opacity = Math.max(0, 1 - e.life / 0.9);
-    if (e.life > 0.9) {
+    if (!e.fade) {
+      e.vel.y -= 9 * dt;
+      e.mesh.position.addScaledVector(e.vel, dt);
+      e.mesh.rotation.x += dt * 6; e.mesh.rotation.y += dt * 4;
+    }
+    e.mesh.material.opacity = Math.max(0, 1 - e.life / ttl);
+    if (e.life > ttl) {
       scene.remove(e.mesh);
       e.mesh.material.dispose();
+      e.mesh.geometry.dispose();
       effects.splice(i, 1);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- bugs
+
+const cellList = plotLayout();
+
+const bugs = new BugSystem(scene, {
+  plotCells: () => cellList,
+  plantedPlots: () => state.plots.map((p, i) => (p ? i : -1)).filter(i => i >= 0),
+  onAttach: (index, specId) => { addBug(index, specId); },
+  onDetach: (index, specId) => { removeBug(index, specId); },
+  onKill: bug => {
+    earn(bug.spec.bounty);
+    burst({ x: bug.mesh.position.x, z: bug.mesh.position.z }, bug.spec.color);
+    sfx.squish();
+    ui.refresh();
+  },
+});
+
+/** Put saved infestations back in the world when the game starts. */
+function restoreBugs() {
+  bugs.clear();
+  state.plots.forEach((plot, i) => {
+    for (const specId of plot?.bugs || []) bugs.spawnAttached(specId, i);
+  });
+}
+
+function scheduleRaid(first = false) {
+  const wait = first ? 90 + Math.random() * 60 : RAID_MIN + Math.random() * (RAID_MAX - RAID_MIN);
+  state.nextRaid = Date.now() + wait * 1000;
+}
+
+function startRaid() {
+  const planted = state.plots.filter(Boolean).length;
+  if (!planted) { scheduleRaid(); return; }
+  const level = raidLevel(state.owned, state.discovered);
+  const n = Math.min(12, 2 + Math.floor(level * 1.4) + Math.floor(Math.random() * 3));
+  const sent = bugs.spawnWave(n, level);
+  if (sent) {
+    ui.toast(`🐛 <b>Bug raid!</b> ${sent} bugs heading for your crops`, 'bad');
+    sfx.raid();
+    gamepad.rumble(0.5, 320);
+  }
+  scheduleRaid();
+  save();
+}
+
+function updateRaids() {
+  if (!state.nextRaid) { scheduleRaid(true); return; }
+  if (Date.now() >= state.nextRaid) startRaid();
+}
+
+// ---------------------------------------------------------------- combat
+
+let fireCooldown = 0;
+
+function fireWeapon() {
+  const w = WEAPONS_BY_ID[player.weapon];
+  if (!w || fireCooldown > 0) return;
+  fireCooldown = w.cooldown;
+  player.swing = 1;
+
+  const origin = player.headPosition();
+  const dir = player.lookDirection();
+  const muzzle = origin.clone().addScaledVector(dir, 0.6);
+  const tint = TIERS[w.tier].color;
+  let hits = 0;
+
+  if (w.kind === 'melee' || w.kind === 'spray') {
+    // Everything in a short arc ahead of you.
+    const reach = origin.clone().addScaledVector(dir, w.range * 0.6);
+    for (const bug of bugs.near(reach.x, reach.z, w.kind === 'spray' ? w.splash : 1.6)) {
+      bugs.damage(bug, w.damage); hits++;
+    }
+    if (w.kind === 'spray') waterBurst(scene, reach.x, reach.z, 1.4, effects);
+  } else {
+    const bug = bugs.pick(origin, dir, w.range);
+    const end = bug ? bug.mesh.position.clone().setY(bug.mesh.position.y + 0.3) : origin.clone().addScaledVector(dir, w.range);
+    tracer(scene, muzzle, end, tint, effects, w.kind === 'chain' ? 0.07 : 0.04);
+    if (bug) {
+      bugs.damage(bug, w.damage); hits++;
+      if (w.kind === 'chain') {
+        // Arc onward to nearby bugs.
+        let from = bug;
+        const zapped = new Set([bug]);
+        for (let i = 1; i < w.chains; i++) {
+          const next = bugs.near(from.mesh.position.x, from.mesh.position.z, 6).find(b => !zapped.has(b));
+          if (!next) break;
+          tracer(scene, from.mesh.position, next.mesh.position, 0x9fe8ff, effects, 0.05);
+          zapped.add(next);
+          const pos = from.mesh.position.clone();
+          bugs.damage(next, w.damage * 0.7); hits++;
+          from = next;
+          void pos;
+        }
+      }
+    }
+  }
+
+  sfx.shoot(w.kind);
+  if (hits) gamepad.rumble(0.25, 70);
+}
+
+/** Turrets pick their own targets and fire on their own clock. */
+function updateTurrets(dt) {
+  for (let i = 0; i < PLOT_COUNT; i++) {
+    const view = world.plots[i];
+    if (!view.turret) continue;
+    const spec = view.turret.userData.spec;
+    const target = bugs.nearest(view.x, view.z, spec.range);
+    animateTurret(view.turret, dt, target?.mesh.position);
+    view.turret.userData.cooldown -= dt;
+    if (target && view.turret.userData.cooldown <= 0) {
+      view.turret.userData.cooldown = 1 / spec.rate;
+      const from = new THREE.Vector3(view.x, 1.0, view.z);
+      tracer(scene, from, target.mesh.position.clone().setY(0.3), TIERS[spec.tier].color, effects, 0.045);
+      bugs.damage(target, spec.damage);
     }
   }
 }
@@ -447,12 +637,21 @@ function updatePrompt() {
         <span class="digbar"><i style="width:${pct}%"></i></span>`);
       return;
     }
-    if (!plot && state.sprinklers[i]) {
-      const spr = SPRINKLERS_BY_ID[state.sprinklers[i]];
-      ui.setPrompt(`${spr.name} <span class="sub" style="color:${TIERS[spr.tier].css}">${spr.speed}× growth in range · G + hold E to pick up</span>`);
+    if (!plot && deviceAt(i)) {
+      const dev = deviceAt(i);
+      const detail = dev.speed
+        ? `${dev.speed}× growth in range`
+        : `${fmt(dev.damage)} damage · ${dev.rate}/s · ${dev.range > 100 ? 'whole garden' : dev.range + 'm'}`;
+      ui.setPrompt(`${dev.name} <span class="sub" style="color:${TIERS[dev.tier].css}">${detail} · G + hold E to pick up</span>`);
       return;
     }
     if (!plot) {
+      const tur = TURRETS_BY_ID[ui.selected];
+      if (tur) {
+        ui.setPrompt(`<b>[E]</b> Place ${tur.name}
+          <span class="sub">${fmt(tur.damage)} damage at ${tur.rate}/s · ${tur.range > 100 ? 'covers the whole garden' : 'range ' + tur.range + 'm'} · uses up this plot</span>`);
+        return;
+      }
       const spr = SPRINKLERS_BY_ID[ui.selected];
       if (spr) {
         ui.setPrompt(`<b>[E]</b> Place ${spr.name}
@@ -486,10 +685,12 @@ function updatePrompt() {
       const wait = Math.ceil(cycleSeconds(plot, i) * (1 - growth(plot, i)));
       const verb = isRegrowing(plot) ? 'regrowing' : 'grown';
       const tail = p.harvests === 1 ? '' : ` · ${picks} harvest${picks === 1 ? '' : 's'} left`;
-      const speed = plotSpeed(i);
-      const wet = speed > 1 ? ` · <span style="color:#8fd8ff">${speed}× sprinkler</span>` : '';
+      const spr = sprinklerSpeed(i);
+      const infest = bugsOn(i);
+      const wet = spr > 1 ? ` · <span style="color:#8fd8ff">${spr}× sprinkler</span>` : '';
+      const chewed = infest ? ` · <span style="color:#ff7b6b">🐛 ${infest} bug${infest === 1 ? '' : 's'} slowing it</span>` : '';
       ui.setPrompt(`${p.name} — ${Math.floor(growth(plot, i) * 100)}% ${verb}
-        <span class="sub">ready in ${wait}s${tail}${wet}</span>`);
+        <span class="sub">ready in ${wait}s${tail}${wet}${chewed}</span>`);
     }
     return;
   }
@@ -506,10 +707,12 @@ function interact() {
     const i = target;
     if (i >= state.owned) { buyPlot(i); return; }
     const plot = state.plots[i];
-    if (player.shovel && (plot || state.sprinklers[i])) return;   // handled by hold-to-dig
+    if (player.weapon) return;                                    // armed: E fires instead
+    if (player.shovel && (plot || deviceAt(i))) return;            // handled by hold-to-dig
     if (player.can && plot) { waterPlot(i); return; }
-    if (!plot && state.sprinklers[i]) return;
+    if (!plot && deviceAt(i)) return;
     if (!plot && SPRINKLERS_BY_ID[ui.selected]) { placeSprinkler(i); return; }
+    if (!plot && TURRETS_BY_ID[ui.selected]) { placeTurret(i); return; }
     if (!plot) plant(i);
     else if (isRipe(plot, i)) harvest(i);
     else ui.toast(`${PLANTS_BY_ID[plot.plantId].name} is still growing.`);
@@ -539,6 +742,7 @@ window.addEventListener('keydown', e => {
     case 'KeyP': togglePadTest(); break;
     case 'KeyG': toggleShovel(); break;
     case 'KeyF': toggleCan(); break;
+    case 'KeyR': toggleWeapon(); break;
     default:
       if (/^Digit[1-9]$/.test(e.code)) ui.selectIndex(Number(e.code.slice(5)) - 1);
   }
@@ -638,6 +842,7 @@ function updateGamepad(dt) {
   if (pressed.has(BTN.RB)) ui.cycleSelection(1);
   if (pressed.has(BTN.DOWN)) toggleShovel();
   if (pressed.has(BTN.UP)) toggleCan();
+  if (pressed.has(BTN.LEFT)) toggleWeapon();
   if (pressed.has(BTN.R3)) { player.camDistance = player.camDistance > 4 ? 3.2 : 6.0; }
   if (pressed.has(BTN.START) || pressed.has(BTN.BACK)) { document.exitPointerLock?.(); ui.showMenu(true); }
 }
@@ -645,7 +850,8 @@ function updateGamepad(dt) {
 function toggleShovel(force) {
   const on = player.setShovel(force ?? !player.shovel);
   ui.setShovel(on);
-  if (on && player.can) { player.setCan(false); ui.setCan(false); }
+  if (on) { if (player.can) { player.setCan(false); ui.setCan(false); }
+            if (player.weapon) { player.setWeapon(false); ui.setWeapon(null); } }
   ui.toast(on ? 'Shovel out — hold E on a plant to dig it up' : 'Shovel away');
   return on;
 }
@@ -655,9 +861,29 @@ function toggleCan(force) {
   if (!can) { ui.toast('You do not own a watering can yet — check the shop (B).', 'bad'); sfx.deny(); return false; }
   const on = player.setCan(force ?? !player.can, can);
   ui.setCan(on);
-  if (on && player.shovel) toggleShovel(false);
+  if (on) { if (player.shovel) toggleShovel(false);
+            if (player.weapon) { player.setWeapon(false); ui.setWeapon(null); } }
   ui.toast(on ? `${can.name} out — press E on a plant to water it` : 'Watering can away');
   return on;
+}
+
+function bestWeapon() {
+  return WEAPONS_BY_ID[[...Object.keys(state.weapons)]
+    .sort((a, b) => WEAPONS_BY_ID[b].damage - WEAPONS_BY_ID[a].damage)[0]] || null;
+}
+
+function toggleWeapon(force) {
+  const w = bestWeapon();
+  if (!w) { ui.toast('You have no weapons — check the shop (B).', 'bad'); sfx.deny(); return false; }
+  const on = player.setWeapon(force ?? !player.weapon, w);
+  ui.setWeapon(on ? w.id : null);
+  if (on) { toggleShovelOff(); player.setCan(false); ui.setCan(false); }
+  ui.toast(on ? `${w.name} ready — E or click to swing` : 'Weapon away');
+  return on;
+}
+
+function toggleShovelOff() {
+  if (player.shovel) { player.setShovel(false); ui.setShovel(false); }
 }
 
 const padTestEl = document.getElementById('padtest');
@@ -684,7 +910,15 @@ function tick() {
   const active = !ui.modalOpen;
 
   updateGamepad(dt);
-  updateDigging(active && (player.keys.has('KeyE') || mouseHeld || gamepad.held.has(BTN.A)));
+  const using = active && (player.keys.has('KeyE') || mouseHeld || gamepad.held.has(BTN.A));
+  updateDigging(using && !player.weapon);
+  updateRaids();
+  bugs.update(dt, t, camera);
+  updateTurrets(dt);
+  fireCooldown = Math.max(0, fireCooldown - dt);
+  if (player.weapon && using) fireWeapon();
+  player.swing = Math.max(0, player.swing - dt * 4);
+  ui.setBugCount(bugs.count);
   if (!padTestEl.classList.contains('hidden')) {
     padTestClock += dt;
     if (padTestClock > 0.08) { padTestClock = 0; renderPadTest(padTestEl, gamepad); }
@@ -724,9 +958,11 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { build: BUILD_LABEL, toggleShovel, toggleCan, digUp, sellSeed, buyCan, buySprinkler, placeSprinkler,
+window.game = { build: BUILD_LABEL, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
+                placeSprinkler, buyWeapon, buyTurret, placeTurret, bugs, startRaid, fireWeapon,
                 waterPlot, refreshSprinklers, plotSpeed, state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
 
+restoreBugs();
 syncAllPlots();
 ui.refresh();
 document.getElementById('loading').remove();

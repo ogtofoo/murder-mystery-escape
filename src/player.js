@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { buildGardener, buildShovel, animateGardener, setShovel } from './gardener.js';
-import { buildCan } from './devices.js';
+import { buildCan, buildWeapon } from './devices.js';
 
 const WALK = 5.2;
 const SPRINT = 9.0;
@@ -14,8 +14,10 @@ const FOV_THIRD = 72;
 const WORLD_RADIUS = 72;
 
 export class Player {
-  constructor(scene, camera, domElement) {
+  constructor(scene, camera, domElement, obstacles = []) {
     this.camera = camera;
+    this.obstacles = obstacles;          // things the third-person camera must not sit inside
+    this.camRay = new THREE.Raycaster();
     this.dom = domElement;
     this.model = buildGardener();
     scene.add(this.model);
@@ -35,8 +37,12 @@ export class Player {
     this.digging = 0;
     this.heldCan = null;      // in-hand can model
     this.fpCan = null;        // first-person can model
+    this.weapon = null;       // equipped weapon id
+    this.heldGun = null;
+    this.fpGun = null;
+    this.swing = 0;           // 1 right after firing, decays
 
-    this.pos = new THREE.Vector3(0, 0, 9);
+    this.pos = new THREE.Vector3(0, 0, 7.5);
     this.vy = 0;
     this.grounded = true;
     this.yaw = Math.PI;      // facing the garden
@@ -122,6 +128,29 @@ export class Player {
     return this.can;
   }
 
+  /** Arm or stow a weapon. */
+  setWeapon(on, spec = null) {
+    if (on && spec && this.weaponSpec?.id !== spec.id) {
+      if (this.heldGun) this.model.userData.armR.remove(this.heldGun);
+      if (this.fpGun) this.camera.remove(this.fpGun);
+      this.weaponSpec = spec;
+
+      this.heldGun = buildWeapon(spec);
+      this.heldGun.position.set(0.02, -0.58, 0.16);
+      this.heldGun.rotation.set(-0.4, 0, 0);
+      this.model.userData.armR.add(this.heldGun);
+
+      this.fpGun = buildWeapon(spec);
+      this.fpGun.position.set(0.32, -0.28, -0.7);
+      this.fpGun.rotation.set(0, -0.12, 0);
+      this.fpGun.scale.setScalar(0.9);
+      this.camera.add(this.fpGun);
+    }
+    this.weapon = on && this.weaponSpec ? this.weaponSpec.id : null;
+    if (on) { this.shovel = false; this.can = false; setShovel(this.model, false); }
+    return this.weapon;
+  }
+
   toggleView() {
     this.view = this.view === 'third' ? 'first' : 'third';
     this._first = true;
@@ -195,6 +224,13 @@ export class Player {
     this.model.position.copy(this.pos);
     this.model.visible = this.view === 'third';
     this.fpShovel.visible = this.shovel && this.view === 'first';
+    if (this.heldGun) this.heldGun.visible = !!this.weapon && this.view === 'third';
+    if (this.fpGun) {
+      this.fpGun.visible = !!this.weapon && this.view === 'first';
+      // Recoil / swing kick.
+      this.fpGun.position.z = -0.7 + this.swing * 0.18;
+      this.fpGun.rotation.x = -this.swing * 0.7;
+    }
     if (this.heldCan) this.heldCan.visible = this.can && this.view === 'third';
     if (this.fpCan) {
       this.fpCan.visible = this.can && this.view === 'first';
@@ -207,7 +243,7 @@ export class Player {
       this.fpShovel.position.set(0.34, -0.30 + bob - this.digging * 0.12, -0.62);
       this.fpShovel.rotation.x = 0.15 + Math.sin(t * 9) * 0.35 * this.digging;
     }
-    animateGardener(this.model, dt, this.speed01, this.grounded, t, this.digging);
+    animateGardener(this.model, dt, this.speed01, this.grounded, t, this.digging, this.swing);
 
     this.updateCamera(dt);
   }
@@ -228,7 +264,16 @@ export class Player {
     } else {
       const target = head.clone().addScaledVector(dir, 0.5);
       target.y += 0.45;
-      const want = target.clone().addScaledVector(dir, -this.camDistance);
+      // Pull the camera in if scenery (the shop stall) is behind the player.
+      let dist = this.camDistance;
+      if (this.obstacles.length) {
+        const back = dir.clone().negate();
+        this.camRay.set(target, back);
+        this.camRay.far = dist + 0.4;
+        const hit = this.camRay.intersectObjects(this.obstacles, true)[0];
+        if (hit) dist = Math.max(2.2, hit.distance - 0.3);
+      }
+      const want = target.clone().addScaledVector(dir, -dist);
       want.y = Math.max(0.6, want.y);
       if (this._first) this._smoothCam.copy(want);
       else this._smoothCam.lerp(want, 1 - Math.pow(0.0015, dt));

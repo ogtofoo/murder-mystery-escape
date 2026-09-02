@@ -29,6 +29,14 @@ export const sfx = {
   buy() { beep(660, 0.09, 'square', 0.05); beep(880, 0.11, 'square', 0.04, 0.07); },
   deny() { beep(160, 0.16, 'sawtooth', 0.05); },
   water() { beep(880, 0.1, 'sine', 0.04); beep(1180, 0.14, 'sine', 0.035, 0.05); beep(1480, 0.16, 'sine', 0.03, 0.11); },
+  squish() { beep(220, 0.09, 'sawtooth', 0.05); beep(120, 0.12, 'triangle', 0.04, 0.04); },
+  raid() { [180, 150, 180, 150].forEach((n, i) => beep(n, 0.18, 'square', 0.05, i * 0.19)); },
+  shoot(kind) {
+    if (kind === 'melee') beep(520, 0.07, 'triangle', 0.045);
+    else if (kind === 'spray') beep(1400, 0.1, 'sawtooth', 0.03);
+    else if (kind === 'chain') { beep(1600, 0.09, 'square', 0.045); beep(2200, 0.09, 'square', 0.03, 0.04); }
+    else beep(300, 0.08, 'square', 0.05);
+  },
   dig() { beep(120, 0.18, 'sawtooth', 0.06); beep(90, 0.22, 'triangle', 0.05, 0.08); },
   harvest(tier = 0) {
     const base = 440 + tier * 40;

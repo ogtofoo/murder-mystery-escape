@@ -110,6 +110,59 @@ export function sprinklerCoverage(radius) {
   return most;
 }
 
+/**
+ * Bugs raid the garden and latch onto planted plots, where they chew and slow
+ * growth. Tougher species only show up as the garden gets bigger.
+ */
+export const BUGS = [
+  { id:'aphid',  name:'Aphid',        level:1, hp:30,     speed:1.6, size:0.45, color:0x8bc34a, bounty:25 },
+  { id:'beetle', name:'Leaf Beetle',  level:2, hp:130,    speed:1.3, size:0.62, color:0x6d4c41, bounty:500 },
+  { id:'locust', name:'Locust',       level:3, hp:700,    speed:2.1, size:0.72, color:0xc9a227, bounty:15000 },
+  { id:'grub',   name:'Root Grub',    level:4, hp:3600,   speed:0.9, size:0.95, color:0xe8c9a0, bounty:800000 },
+  { id:'mantis', name:'Void Mantis',  level:5, hp:26000,  speed:1.8, size:1.15, color:0x7c4dff, bounty:1.2e8 },
+  { id:'titan',  name:'Titan Weevil', level:6, hp:180000, speed:1.0, size:1.5,  color:0xff4081, bounty:1.4e10 },
+];
+export const BUGS_BY_ID = Object.fromEntries(BUGS.map(b => [b.id, b]));
+
+/** Each bug on a plot drags its growth down by this much. */
+export const BUG_SLOW = 0.75;
+
+/** Weapons: swung or fired at bugs by hand. */
+export const WEAPONS = [
+  { id:'swatter', name:'Bug Swatter',  tier:'common',    cost:2000,  damage:40,    range:3.6, cooldown:0.42, kind:'melee' },
+  { id:'sprayer', name:'Pest Sprayer', tier:'rare',      cost:9e5,   damage:110,   range:7,   cooldown:0.30, kind:'spray', splash:2.4 },
+  { id:'blaster', name:'Bug Blaster',  tier:'legendary', cost:4e8,   damage:1100,  range:22,  cooldown:0.24, kind:'beam' },
+  { id:'zapper',  name:'SUPER Zapper', tier:'super',     cost:2e11,  damage:11000, range:32,  cooldown:0.18, kind:'chain', chains:5 },
+];
+export const WEAPONS_BY_ID = Object.fromEntries(WEAPONS.map(w => [w.id, w]));
+
+/** Turrets stand on a plot like sprinklers and shoot bugs on their own. */
+export const TURRETS = [
+  { id:'tur_common',       name:'Common Turret',       tier:'common',       cost:5e6,  damage:35,     rate:1.2, range:6 },
+  { id:'tur_rare',         name:'Rare Turret',         tier:'rare',         cost:8e8,  damage:180,    rate:1.5, range:8 },
+  { id:'tur_legendary',    name:'Legendary Turret',    tier:'legendary',    cost:1.5e11,damage:1400,  rate:2.0, range:11 },
+  { id:'tur_prismatic',    name:'Prismatic Turret',    tier:'prismatic',    cost:2e13, damage:11000,  rate:2.5, range:15 },
+  { id:'tur_transcendent', name:'Transcendent Turret', tier:'transcendent', cost:9e14, damage:90000,  rate:3.0, range:22 },
+  { id:'tur_super',        name:'SUPER Turret',        tier:'super',        cost:5e16, damage:650000, rate:4.0, range:999 },
+];
+export const TURRETS_BY_ID = Object.fromEntries(TURRETS.map(t => [t.id, t]));
+
+/** How nasty raids get, from how far along the garden is. */
+export function raidLevel(ownedPlots, discovered) {
+  const best = PLANTS.filter(p => discovered?.[p.id]).reduce((m, p) => Math.max(m, TIERS[p.tier].order), 0);
+  return Math.max(1, Math.min(BUGS.length, Math.round(1 + best * 0.7 + ownedPlots / 12)));
+}
+
+/** Pick a bug species for a raid at this level — mostly the toughest available. */
+export function rollBug(level) {
+  const pool = BUGS.filter(b => b.level <= level);
+  const weights = pool.map(b => (b.level === level ? 6 : b.level === level - 1 ? 3 : 1));
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) return pool[i]; }
+  return pool[pool.length - 1];
+}
+
 export const PACKS = [
   { id:'sprout',   name:'Sprout Pack',    cost:900,   seeds:3, weights:{ common:55, uncommon:33, rare:11, legendary:1 } },
   { id:'garden',   name:'Garden Pack',    cost:90000, seeds:3, weights:{ uncommon:44, rare:40, legendary:14, mythic:2 } },

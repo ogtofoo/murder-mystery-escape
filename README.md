@@ -131,6 +131,39 @@ Soil under a sprinkler reads darker, and the growth prompt shows the multiplier.
 
 The shovel picks a sprinkler back up and returns it to your shed, so moving one costs nothing.
 
+### Bugs, weapons and turrets
+
+Every few minutes a **bug raid** crosses the field toward your crops. A bug that reaches a plot
+latches on and chews: each one drags that plot's growth down (one bug ≈ 0.57×, two ≈ 0.4×), and
+they stay until something kills them — including while the game is closed. The HUD shows how
+many are in the garden, and an infested plot says so in its prompt.
+
+Raids get nastier as you progress, from Aphids up through Leaf Beetles, Locusts, Root Grubs,
+Void Mantises and Titan Weevils. Killing one pays a bounty scaled to its species.
+
+**Weapons** — press `R` to arm the best one you own, then `E` or click (hold to keep firing).
+
+| Weapon | Cost | Damage | How it fights |
+| --- | --- | --- | --- |
+| Bug Swatter | ₪2K | 40 / 0.42s | Swing at anything close |
+| Pest Sprayer | ₪900K | 110 / 0.3s | Sprays a 2.4m cloud |
+| Bug Blaster | ₪400M | 1.1K / 0.24s | Hitscan out to 22m |
+| SUPER Zapper | ₪200B | 11K / 0.18s | Arcs to 5 bugs at once |
+
+**Turrets** stand on a plot like a sprinkler and shoot on their own, whether you're watching or
+not. They are deliberately expensive.
+
+| Turret | Cost | Damage | Rate | Range |
+| --- | --- | --- | --- | --- |
+| Common | ₪5M | 35 | 1.2/s | 6m |
+| Rare | ₪800M | 180 | 1.5/s | 8m |
+| Legendary | ₪150B | 1.4K | 2/s | 11m |
+| Prismatic | ₪20T | 11K | 2.5/s | 15m |
+| Transcendent | ₪900T | 90K | 3/s | 22m |
+| SUPER | ₪50Qa | 650K | 4/s | the whole garden |
+
+The shovel lifts a turret back into your shed, same as a sprinkler.
+
 ### The shovel
 
 Press `G` to take out the shovel, then **hold** `E` on any planted plot to dig the crop up and
@@ -187,7 +220,8 @@ src/
   state.js        save file, money, inventory, growth timers
   world.js        sky, lights, ground, plot grid, shop stall, scenery
   plants.js       procedural low-poly crop models (root/leaf/bush/vine/flower/pitaya/tree/orb)
-  devices.js      sprinkler and watering-can models, spray and splash effects
+  bugs.js         bug raids: spawning, crawling, chewing, health bars, dying
+  devices.js      sprinkler, can, turret and weapon models, sprays and tracers
   gardener.js     the 3D gardener and their walk cycle
   player.js       movement, mouse look, first/third person camera
   ui.js           HUD, hotbar, shop tabs, pack reveals, toasts

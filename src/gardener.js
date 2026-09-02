@@ -80,8 +80,14 @@ export function buildGardener() {
  */
 export function setShovel(g, on) { g.userData.shovel.visible = on; }
 
-export function animateGardener(g, dt, speed01, grounded, t, digging = 0) {
+export function animateGardener(g, dt, speed01, grounded, t, digging = 0, attack = 0) {
   const u = g.userData;
+  if (attack > 0) {
+    u.armR.rotation.x = -1.5 - attack * 0.9;
+    u.armL.rotation.x = -0.5;
+    u.body.rotation.x = 0;
+    return;
+  }
   if (digging > 0) {
     // Both arms forward, a rhythmic dig; overrides the walk pose below.
     const swing = Math.sin(t * 9) * 0.45;
