@@ -6,7 +6,7 @@ import { PLOT_COUNT, PLANTS_BY_ID, plotCost, plotLayout, LAYOUT_ID,
          GOLDEN_MIN_EARNED, WEATHERS, mutationMultiplier, VARIANTS_BY_ID, MARKS,
          PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS_BY_ID,
          TREAT_VALUE, HAPPY_MAX, HAPPY_DECAY_PER_MIN, happyBonus,
-         UPGRADES, UPGRADES_BY_ID, upgradeCost, rankFor } from './data.js';
+         UPGRADES, UPGRADES_BY_ID, upgradeCost, rankFor, dietBonus, dietSummary } from './data.js';
 
 const SAVE_KEY = 'sheckle-garden-save-v1';
 export const SAVE_VERSION = 2;
@@ -124,6 +124,14 @@ function sanitize(raw) {
     const out = { plantId: p.plantId, plantedAt: Math.min(p.plantedAt, Date.now()), taken, watered: !!p.watered };
     // Bugs left chewing when you quit are still there when you come back.
     if (Array.isArray(p.bugs)) out.bugs = p.bugs.filter(id => BUGS_BY_ID[id]).slice(0, 12);
+    // A carnivore remembers how much it has eaten, and of what.
+    if (Number.isFinite(p.fed)) out.fed = Math.max(0, Math.floor(p.fed));
+    if (p.diet && typeof p.diet === 'object') {
+      out.diet = {};
+      for (const [id, n] of Object.entries(p.diet)) {
+        if (BUGS_BY_ID[id] && Number.isFinite(n) && n > 0) out.diet[id] = Math.floor(n);
+      }
+    }
     // Whatever the crop mutated into as it ripened.
     if (p.mut && VARIANTS_BY_ID[p.mut.v]) out.mut = { v: p.mut.v, m: MARKS[p.mut.m] ? p.mut.m : null };
     if (Number.isFinite(p.x) && Number.isFinite(p.z)) { out.x = p.x; out.z = p.z; }
@@ -277,10 +285,11 @@ export function luckMultiplier() {
 
 export function rank() { return rankFor(state.stats.earned); }
 
-/** What a crop is worth: base × mutation × Golden Seeds × pets × upgrades. */
-export function cropValue(plant, mut = null) {
+/** What a crop is worth: base × mutation × Golden Seeds × pets × upgrades × diet. */
+export function cropValue(plant, mut = null, diet = null) {
   const boost = (1 + petPower('value')) * (1 + upgradeLevel('sap') * 0.06);
-  return Math.floor(plant.sell * mutationMultiplier(mut) * goldenMultiplier(state.golden) * boost);
+  return Math.floor(plant.sell * mutationMultiplier(mut) * goldenMultiplier(state.golden)
+    * boost * (plant.carnivore ? dietBonus(diet) : 1));
 }
 
 /** Weather, pets and upgrades all speed the whole garden up. */
@@ -437,8 +446,31 @@ export function cycleSeconds(plot, index = -1) {
 
 /** Growth progress of a plot's current cycle, 0..1. */
 export function growth(plot, index = -1) {
-  if (!plot || !PLANTS_BY_ID[plot.plantId]) return 0;
-  return Math.min(1, (Date.now() - plot.plantedAt) / (cycleSeconds(plot, index) * 1000));
+  const plant = PLANTS_BY_ID[plot?.plantId];
+  if (!plant) return 0;
+  const byTime = (Date.now() - plot.plantedAt) / (cycleSeconds(plot, index) * 1000);
+  // Carnivores also have to eat their fill — whichever is further behind wins.
+  if (plant.carnivore) return Math.min(1, byTime, (plot.fed || 0) / plant.eats);
+  return Math.min(1, byTime);
+}
+
+/** How close a carnivore is to being fed enough, 0..1. */
+export function feedProgress(plot) {
+  const plant = PLANTS_BY_ID[plot?.plantId];
+  if (!plant?.carnivore) return 1;
+  return Math.min(1, (plot.fed || 0) / plant.eats);
+}
+
+/** Record a bug swallowed by the plant on this plot. */
+export function feedCarnivore(index, bugId) {
+  const plot = state.plots[index];
+  const plant = PLANTS_BY_ID[plot?.plantId];
+  if (!plant?.carnivore) return false;
+  plot.fed = (plot.fed || 0) + 1;
+  plot.diet ||= {};
+  plot.diet[bugId] = (plot.diet[bugId] || 0) + 1;
+  state.stats.eaten = (state.stats.eaten || 0) + 1;
+  return true;
 }
 
 export function isRipe(plot, index = -1) { return growth(plot, index) >= 1; }

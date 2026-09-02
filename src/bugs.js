@@ -229,13 +229,14 @@ export class BugSystem {
     return false;
   }
 
-  kill(bug) {
+  kill(bug, opts = {}) {
     const i = this.bugs.indexOf(bug);
     if (i < 0) return;
     this.bugs.splice(i, 1);
     this.scene.remove(bug.mesh, bug.bar);
     if (bug.attached) this.hooks.onDetach(bug.target, bug.spec.id);
-    this.hooks.onKill(bug);
+    // A bug swallowed by a plant pays no bounty — the plant got the meal.
+    if (!opts.silent) this.hooks.onKill(bug);
   }
 
   /** Wipe every bug (used when a save is replaced). */

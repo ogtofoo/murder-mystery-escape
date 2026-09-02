@@ -9,6 +9,7 @@ export const TIERS = {
   prismatic:    { id:'prismatic',    name:'Prismatic',    color:0xff4fd8, css:'#ff4fd8', order:5, shine:0.8, rainbow:true },
   transcendent: { id:'transcendent', name:'Transcendent', color:0x00e5ff, css:'#00e5ff', order:6, shine:1.0, rainbow:true },
   super:        { id:'super',        name:'SUPER',        color:0xffd54f, css:'#fff1a8', order:7, shine:1.0, rainbow:true },
+  carnivore:    { id:'carnivore',    name:'CARNIVORE',    color:0xff1744, css:'#ff4d6d', order:8, shine:1.2, rainbow:true },
 };
 
 export const TIER_ORDER = Object.values(TIERS).sort((a,b)=>a.order-b.order).map(t=>t.id);
@@ -47,6 +48,11 @@ export const PLANTS = [
   { id:'sheckletree',name:'Sheckle Tree',tier:'super', kind:'cointree', cost:5e12, grow:340, sell:2.8e13, colors:[0xffe082,0x8d6e63] },
   { id:'infinitygourd',name:'Infinity Gourd',tier:'super', kind:'gourd', cost:2.2e13,grow:380, sell:1.3e14, colors:[0xfff59d,0xff8a80] },
   { id:'superfruit', name:'SUPERFRUIT',  tier:'super', kind:'star',  cost:1e14, grow:420, sell:6.5e14, harvests:8, colors:[0xffffff,0xffd54f] },
+  // ---- Carnivore: these do not ripen on time alone. They have to eat. ----
+  { id:'snaptrap',  name:'Venus Snaptrap', tier:'carnivore', kind:'trap',    cost:8e14, grow:520, sell:9e15,  harvests:5, eats:10, reach:3.2, colors:[0xff1744,0x2e7d32] },
+  { id:'pitcher',   name:'Pitcher Beast',  tier:'carnivore', kind:'pitcher', cost:6e15, grow:640, sell:7e16,  harvests:5, eats:18, reach:3.8, colors:[0xab47bc,0x4caf50] },
+  { id:'gulper',    name:'Bog Gulper',     tier:'carnivore', kind:'maw',     cost:5e16, grow:780, sell:6e17,  harvests:4, eats:30, reach:4.5, colors:[0xd50000,0x1b5e20] },
+  { id:'devourer',  name:'World Devourer', tier:'carnivore', kind:'maw',     cost:4e17, grow:900, sell:5e18,  harvests:4, eats:50, reach:6.0, colors:[0x212121,0xff1744] },
 ];
 
 /**
@@ -54,19 +60,24 @@ export const PLANTS = [
  * pull out of the ground whole (roots, leafy greens, corn) are one-and-done;
  * anything that fruits from a standing plant keeps producing.
  */
+const CARNIVORE_KINDS = new Set(['trap', 'pitcher', 'maw']);
+
 const HARVESTS_BY_KIND = {
   root: 1, glowroot: 1, leaf: 1, head: 1, corn: 1,        // pulled up whole
   bush: 4, pepper: 4, melon: 3, pumpkin: 3, gourd: 3, grapes: 3,
   flower: 5, lotus: 5, rose: 5, pitaya: 5, star: 5,
   tree: 6, cointree: 6, clock: 8,
+  trap: 5, pitcher: 5, maw: 4,
 };
 
 // Regrowth is faster than the first grow — established plants pay off quicker.
 const REGROW_RATIO = { tree: 0.5, cointree: 0.5, clock: 0.5, star: 0.5,
                        flower: 0.55, lotus: 0.55, rose: 0.55, pitaya: 0.55,
-                       bush: 0.55, pepper: 0.55, grapes: 0.6, melon: 0.6, pumpkin: 0.6, gourd: 0.6 };
+                       bush: 0.55, pepper: 0.55, grapes: 0.6, melon: 0.6, pumpkin: 0.6, gourd: 0.6,
+                       trap: 0.6, pitcher: 0.6, maw: 0.6 };
 
 for (const p of PLANTS) {
+  p.carnivore = CARNIVORE_KINDS.has(p.kind);
   p.harvests = p.harvests ?? HARVESTS_BY_KIND[p.kind] ?? 1;
   p.regrow = p.harvests > 1 ? Math.max(3, Math.round(p.grow * (REGROW_RATIO[p.kind] ?? 0.55))) : 0;
   // A seed that pays out many times is worth more up front; the table's `cost`
@@ -168,6 +179,27 @@ export function rollBug(level) {
   let r = Math.random() * total;
   for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) return pool[i]; }
   return pool[pool.length - 1];
+}
+
+// ---- Carnivore feeding -------------------------------------------------
+
+/**
+ * A carnivore plant's fruit takes after whatever it has been eating, and the
+ * nastier its diet, the more the fruit is worth.
+ */
+export function dietSummary(diet) {
+  const entries = Object.entries(diet || {}).filter(([id]) => BUGS_BY_ID[id]);
+  if (!entries.length) return null;
+  entries.sort((a, b) => b[1] - a[1]);
+  const total = entries.reduce((a, [, n]) => a + n, 0);
+  const level = entries.reduce((a, [id, n]) => a + BUGS_BY_ID[id].level * n, 0) / total;
+  return { main: BUGS_BY_ID[entries[0][0]], total, level, kinds: entries.length };
+}
+
+/** Value multiplier a carnivore earns from its diet: 1.3x on aphids, 3x on titans. */
+export function dietBonus(diet) {
+  const d = dietSummary(diet);
+  return d ? 1 + 0.35 * d.level : 1;
 }
 
 // ---- Pets --------------------------------------------------------------
@@ -424,6 +456,8 @@ export const TROPHIES = [
   { id:'goldcrop',  name:'Midas Crop',       hint:'Harvest a Gold crop (20×)',       goal:20,    at:s => s.best?.mult || 1, reward:3e6 },
   { id:'rainbowcrop',name:'Over the Rainbow',hint:'Harvest a Rainbow crop (50×)',    goal:50,    at:s => s.best?.mult || 1, reward:5e8 },
   { id:'legendcrop',name:'One in a Million',  hint:'Harvest a crop worth 1,000×',    goal:1000,  at:s => s.best?.mult || 1, reward:0, golden:25 },
+  { id:'firstbite', name:'First Bite',       hint:'Let a carnivore eat 1 bug',        goal:1,     at:s => s.stats.eaten || 0, reward:5e6 },
+  { id:'buffet',    name:'Bug Buffet',       hint:'Feed carnivores 100 bugs',        goal:100,   at:s => s.stats.eaten || 0, reward:0, golden:15 },
   { id:'pets3',     name:'Best Friends',     hint:'Hatch 3 pets',                    goal:3,     at:s => s.pets?.length || 0, reward:1e6 },
   { id:'pets10',    name:'Full Menagerie',   hint:'Hatch 10 pets',                   goal:10,    at:s => s.pets?.length || 0, reward:2e9 },
   { id:'mastery20', name:'Garden Mastery',   hint:'Buy 20 Mastery upgrade levels',   goal:20,    at:s => Object.values(s.upgrades || {}).reduce((a, b) => a + b, 0), reward:5e10 },
@@ -439,6 +473,7 @@ export const PACKS = [
   { id:'celestial',name:'Celestial Pack', cost:9e8,   seeds:3, weights:{ legendary:32, mythic:42, prismatic:21, transcendent:5 } },
   { id:'prism',    name:'Prismatic Pack', cost:9e10,  seeds:4, weights:{ mythic:28, prismatic:46, transcendent:22, super:4 } },
   { id:'super',    name:'SUPER Pack',     cost:9e12,  seeds:4, weights:{ prismatic:22, transcendent:46, super:32 } },
+  { id:'apex',     name:'CARNIVORE Pack', cost:2e15,  seeds:3, weights:{ transcendent:20, super:46, carnivore:34 } },
 ];
 
 // Garden is a GRID_SIZE x GRID_SIZE field of plots; you start owning one.

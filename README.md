@@ -133,6 +133,31 @@ Soil under a sprinkler reads darker, and the growth prompt shows the multiplier.
 
 The shovel picks a sprinkler back up and returns it to your shed, so moving one costs nothing.
 
+### 🪤 CARNIVORE — the class above SUPER
+
+Four meat-eating plants, sold only in the **CARNIVORE Pack**. They are the most valuable crops
+in the game and the only ones that will not ripen on a timer.
+
+| Plant | Seed | Must eat | Reach | Sells for |
+| --- | --- | --- | --- | --- |
+| Venus Snaptrap | ₪2.5Qa | 10 bugs | 3.2m | ₪9Qa × diet |
+| Pitcher Beast | ₪19Qa | 18 bugs | 3.8m | ₪70Qa × diet |
+| Bog Gulper | ₪133Qa | 30 bugs | 4.5m | ₪600Qa × diet |
+| World Devourer | ₪1.06Qi | 50 bugs | 6.0m | ₪5Qi × diet |
+
+**They hunt for themselves.** Any bug that wanders within reach gets snapped up — the jaws
+slam shut, the bug is gone. A carnivore ripens only when *both* its timer has run out **and**
+it has eaten its fill, so it matures slowly and needs raids to come to it. Eaten bugs pay no
+bounty; the plant gets the meal instead.
+
+**Their fruit looks like what they ate.** Little bug-shaped pods grow on the plant in the
+colour of its main prey — green aphid pods, gold locust pods, pink Titan Weevil pods — and the
+nastier the diet, the more the fruit is worth: **×1.35 on aphids up to ×3.1 on Titan Weevils**.
+Each picking empties its stomach, so it has to hunt again for the next one.
+
+This turns bug raids from a nuisance into a harvest. Plant a Devourer, stop shooting, and let
+them come.
+
 ### 🌦️ Day, night and weather
 
 The sky runs a full day every 8 minutes: sunrise, noon, a long golden dusk, then night with
@@ -269,7 +294,7 @@ Nothing is refunded, and while the shovel is out `E` won't harvest — press `G`
 
 ### Tiers
 
-Common → Uncommon → Rare → Legendary → Mythic → Prismatic → Transcendent → **SUPER**
+Common → Uncommon → Rare → Legendary → Mythic → Prismatic → Transcendent → **SUPER** → **CARNIVORE**
 
 A pack never gives you the same species twice — seeds are drawn without replacement, and a
 tier drops out of the draw once all its plants are taken, so its weight passes to the tiers

@@ -1,7 +1,7 @@
 // Procedural low-poly plant models, one silhouette per `kind`.
 
 import * as THREE from 'three';
-import { TIERS } from './data.js';
+import { TIERS, BUGS_BY_ID, dietSummary } from './data.js';
 
 const geoCache = new Map();
 function geo(key, make) {
@@ -322,6 +322,87 @@ const SHAPES = {
     }
   },
 
+  // ---- carnivores ------------------------------------------------------
+  trap(g, plant, { body, foliage, cA }) {
+    g.add(mesh(CYL(), foliage, [0, 0.3, 0], [0.1, 0.6, 0.1]));
+    for (let i = 0; i < 3; i++) {                                        // ground leaves
+      const a = (i / 3) * Math.PI * 2;
+      const l = mesh(LEAF(), foliage, [Math.cos(a) * 0.35, 0.1, Math.sin(a) * 0.35], [1.1, 0.5, 0.6]);
+      l.rotation.set(Math.PI / 2 - 0.25, -a, 0);
+      g.add(l);
+    }
+    // Two hinged lobes that snap shut when the plant catches something.
+    const jaw = new THREE.Group();
+    jaw.position.set(0, 0.66, 0);
+    for (const side of [-1, 1]) {
+      const half = new THREE.Group();
+      half.add(mesh(SPHERE(), mat(cA, plant.tier), [0, 0, 0.18], [0.62, 0.16, 0.7]));
+      for (let i = 0; i < 6; i++) {                                      // teeth
+        const t = mesh(CONE(), mat(0xfff3e0, plant.tier), [-0.26 + i * 0.105, 0.02, 0.42], [0.09, 0.22, 0.09]);
+        t.rotation.x = -0.5;
+        half.add(t);
+      }
+      half.rotation.z = 0;
+      half.rotation.x = side * 0.55;
+      half.userData.jaw = side;
+      jaw.add(half);
+    }
+    jaw.userData.isJaw = true;
+    g.add(jaw);
+    g.userData.jaw = jaw;
+  },
+
+  pitcher(g, plant, { body, foliage, cA }) {
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      const l = mesh(LEAF(), foliage, [Math.cos(a) * 0.38, 0.12, Math.sin(a) * 0.38], [1.2, 0.5, 0.7]);
+      l.rotation.set(Math.PI / 2 - 0.3, -a, 0);
+      g.add(l);
+    }
+    g.add(mesh(CYL(), foliage, [0, 0.34, 0], [0.07, 0.68, 0.07]));
+    const jug = mesh(CYL(), mat(cA, plant.tier), [0.05, 0.68, 0], [0.44, 0.78, 0.44]);
+    g.add(jug);
+    g.add(mesh(RING(), mat(0xffe0b2, plant.tier), [0.05, 1.06, 0], 0.5));  // slippery rim
+    const lid = new THREE.Group();
+    lid.position.set(0.05, 1.08, 0);
+    const flap = mesh(SPHERE(), foliage, [0, 0.02, -0.2], [0.5, 0.1, 0.44]);
+    lid.add(flap);
+    lid.rotation.x = -0.7;
+    lid.userData.isJaw = true;
+    g.add(lid);
+    g.userData.jaw = lid;
+  },
+
+  maw(g, plant, { body, foliage, cA, cB }) {
+    const stalk = mesh(CYL(), mat(cB, plant.tier), [0, 0.34, 0], [0.16, 0.68, 0.16]);
+    g.add(stalk);
+    for (let i = 0; i < 4; i++) {                                        // grasping vines
+      const a = (i / 4) * Math.PI * 2 + 0.4;
+      const v = mesh(CYL(), mat(cB, plant.tier), [Math.cos(a) * 0.34, 0.2, Math.sin(a) * 0.34], [0.06, 0.5, 0.06]);
+      v.rotation.set(Math.cos(a) * 0.7, 0, -Math.sin(a) * 0.7);
+      g.add(v);
+    }
+    const jaw = new THREE.Group();
+    jaw.position.set(0, 0.8, 0);
+    for (const side of [-1, 1]) {
+      const half = new THREE.Group();
+      half.add(mesh(SPHERE(), mat(cA, plant.tier), [0, 0, 0], [0.9, 0.42, 0.86]));
+      for (let i = 0; i < 8; i++) {                                      // a ring of fangs
+        const a = (i / 8) * Math.PI * 2;
+        const t = mesh(CONE(), mat(0xffffff, plant.tier), [Math.cos(a) * 0.34, side * 0.14, Math.sin(a) * 0.34], [0.1, 0.3, 0.1]);
+        t.rotation.x = side > 0 ? Math.PI : 0;
+        half.add(t);
+      }
+      half.position.y = side * 0.2;
+      half.rotation.x = side * 0.35;
+      half.userData.jaw = side;
+      jaw.add(half);
+    }
+    jaw.userData.isJaw = true;
+    g.add(jaw);
+    g.userData.jaw = jaw;
+  },
+
   pitaya(g, plant, { body, foliage, cA, cB }) {
     const stemMat = mat(cB, plant.tier);
     for (let i = 0; i < 3; i++) {
@@ -386,6 +467,51 @@ export function buildPlant(plant) {
 const _c = new THREE.Color();
 
 /**
+ * Hang fruit on a carnivore that looks like the bugs it has been eating —
+ * a little body, wings and legs in that species' colour.
+ */
+export function setCarnivoreFruit(group, diet) {
+  const d = dietSummary(diet);
+  const key = d ? d.main.id + ':' + Math.min(4, Math.round(d.total / 4)) : 'none';
+  if (group.userData.dietKey === key) return;
+  group.userData.dietKey = key;
+
+  for (const old of group.userData.bugFruit || []) group.remove(old);
+  group.userData.bugFruit = [];
+  group.userData.fruits = group.userData.fruits.filter(f => !f.userData.bugFruit);
+  if (!d) return;
+
+  const shell = new THREE.MeshStandardMaterial({
+    color: d.main.color, flatShading: true, roughness: 0.5, metalness: 0.3,
+    emissive: new THREE.Color(0xff1744).multiplyScalar(0.15),
+  });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, flatShading: true });
+  const count = Math.min(4, 1 + Math.floor(d.total / 6));
+
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2 + 0.6;
+    const pod = new THREE.Group();
+    pod.position.set(Math.cos(a) * 0.62, 0.55 + (i % 2) * 0.2, Math.sin(a) * 0.62);
+    pod.add(mesh(SPHERE(), shell, [0, 0, 0], [0.34, 0.26, 0.46]));       // bug-shaped body
+    pod.add(mesh(SPHERE(), shell, [0, 0.04, 0.24], 0.2));                // head
+    for (const side of [-1, 1]) {                                        // legs and feelers
+      for (let l = 0; l < 3; l++) {
+        pod.add(mesh(CYL(), dark, [side * 0.16, -0.06, -0.12 + l * 0.14], [0.022, 0.16, 0.022]));
+      }
+      pod.add(mesh(CYL(), dark, [side * 0.06, 0.16, 0.3], [0.018, 0.16, 0.018]));
+    }
+    pod.userData.fruit = true;
+    pod.userData.bugFruit = true;
+    pod.userData.baseScale = pod.scale.clone();
+    pod.rotation.y = -a;
+    group.add(pod);
+    group.userData.bugFruit.push(pod);
+    group.userData.fruits.push(pod);
+    group.userData.allParts.push(...pod.children);
+  }
+}
+
+/**
  * Dress a ripe crop in whatever it mutated into: gold and silver plate the
  * fruit, rainbow makes it cycle, and the weather marks add a coloured glow.
  */
@@ -431,6 +557,18 @@ export function animatePlant(group, t, dt, ripe, fill = 1) {
     m.emissive.copy(_c).multiplyScalar(0.34);
   }
   for (const s of group.userData.spinners) s.rotation.y += s.userData.spin * dt;
+
+  const jaw = group.userData.jaw;
+  if (jaw) {
+    // 1 right after a catch, easing back to a slow hungry gape.
+    const snap = group.userData.snap || 0;
+    const idle = 0.5 + Math.sin(t * 1.3 + group.userData.phase) * 0.12;
+    for (const half of jaw.children) {
+      const side = half.userData.jaw;
+      if (side === undefined) { jaw.rotation.x = -0.7 * (1 - snap); continue; }
+      half.rotation.x = side * (idle * (1 - snap) + 0.02 * snap);
+    }
+  }
   for (const f of group.userData.fruits) {
     const k = 0.1 + 0.9 * fill * fill;
     f.scale.copy(f.userData.baseScale).multiplyScalar(k);

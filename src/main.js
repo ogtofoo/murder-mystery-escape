@@ -6,16 +6,16 @@ import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollPack, plotCost, PLOT_COUNT, refund
          raidLevel, BUG_SLOW, TROPHIES, goldenMultiplier, WEATHERS, rollWeather, rollMutation,
          mutationMultiplier, mutationName, mutationColor,
          PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS_BY_ID, rollPet, moodOf, TREAT_VALUE,
-         UPGRADES_BY_ID, upgradeCost } from './data.js';
+         UPGRADES_BY_ID, upgradeCost, dietSummary, dietBonus } from './data.js';
 import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount,
          growth, isRipe, isRegrowing, harvestsLeft, cycleSeconds,
          refreshSprinklers, plotSpeed, sprinklerSpeed, sprinklerAt, stockCount, addSprinkler, takeSprinkler,
          bestCan, bugsOn, addBug, removeBug, turretAt, deviceAt,
          cropValue, goldenPending, canGoldenHarvest, goldenHarvest, claimTrophies, weatherSpeed,
          equippedPets, petPower, petHarvestRange, luckMultiplier, upgradeLevel, nextUpgradeCost, rank,
-         feedPet, decayHappiness } from './state.js';
+         feedPet, decayHappiness, feedProgress, feedCarnivore } from './state.js';
 import { buildWorld } from './world.js';
-import { buildPlant, animatePlant, applyMutation } from './plants.js';
+import { buildPlant, animatePlant, applyMutation, setCarnivoreFruit } from './plants.js';
 import { buildSprinkler, animateSprinkler, buildCan, waterBurst,
          buildTurret, animateTurret, buildWeapon, tracer } from './devices.js';
 import { Player } from './player.js';
@@ -285,7 +285,7 @@ function plant(index) {
   if (!id || seedCount(id) <= 0) { ui.toast('No seed selected. Buy one in the shop (B).', 'bad'); sfx.deny(); return; }
   if (state.plots[index]) return;
   takeSeed(id);
-  state.plots[index] = { plantId: id, plantedAt: Date.now(), taken: 0, watered: false, mut: undefined };
+  state.plots[index] = { plantId: id, plantedAt: Date.now(), taken: 0, watered: false, mut: undefined, fed: 0, diet: {} };
   syncPlot(index);
   const planted = PLANTS_BY_ID[id];
   ui.toast(`Planted ${planted.name}${planted.harvests > 1 ? ` — good for ${planted.harvests} harvests` : ''}`);
@@ -358,7 +358,7 @@ function harvest(index) {
   if (!plot || !isRipe(plot, index)) return;
   const p = PLANTS_BY_ID[plot.plantId];
   const mut = plot.mut;
-  const paid = cropValue(p, mut);
+  const paid = cropValue(p, mut, plot.diet);
   earn(paid);
   state.stats.harvested++;
   const mult = mutationMultiplier(mut);
@@ -368,7 +368,12 @@ function harvest(index) {
   plot.taken = (plot.taken || 0) + 1;
   const left = p.harvests - plot.taken;
   if (left <= 0) state.plots[index] = null;
-  else { plot.plantedAt = Date.now(); plot.watered = false; plot.mut = undefined; }
+  else {
+    plot.plantedAt = Date.now();
+    plot.watered = false;
+    plot.mut = undefined;
+    if (p.carnivore) plot.fed = 0;      // it has to hunt again for the next fruit
+  }
 
   burst(world.plots[index], TIERS[p.tier].color);
   syncPlot(index);
@@ -748,6 +753,35 @@ function updateRaids() {
   if (Date.now() >= state.nextRaid) startRaid();
 }
 
+/** Carnivore plants grab any bug that strays within reach and swallow it. */
+function updateCarnivores(dt) {
+  for (let i = 0; i < PLOT_COUNT; i++) {
+    const plot = state.plots[i];
+    const plant = PLANTS_BY_ID[plot?.plantId];
+    if (!plant?.carnivore) continue;
+    const view = world.plots[i];
+    if (!view.crop) continue;
+
+    view.crop.userData.snap = Math.max(0, (view.crop.userData.snap || 0) - dt * 3);
+    if (feedProgress(plot) >= 1) continue;              // full for this cycle
+
+    for (const bug of bugs.near(view.x, view.z, plant.reach)) {
+      feedCarnivore(i, bug.spec.id);
+      // The bug is eaten outright — no bounty, but the plant gets its meal.
+      bugs.kill(bug, { silent: true });
+      view.crop.userData.snap = 1;
+      burst(view, 0xff1744);
+      sfx.chomp();
+      if (feedProgress(plot) >= 1) {
+        ui.toast(`🪤 <b>${plant.name}</b> has eaten its fill — it can ripen now`, 'gold');
+        gamepad.rumble(0.4, 160);
+      }
+      save();
+      break;                                            // one bite per frame, so you can watch
+    }
+  }
+}
+
 // ---------------------------------------------------------------- combat
 
 let fireCooldown = 0;
@@ -928,6 +962,11 @@ function updatePrompt() {
       const x = mut ? ` <b>×${fmt(mutationMultiplier(mut))}</b>` : '';
       show(`<b>[E]</b> Harvest ${tag}${p.name}${x} — <span class="coin">₪${fmt(cropValue(p, mut))}</span>
         <span class="sub" style="color:${TIERS[p.tier].css}">${TIERS[p.tier].name}${more}</span>`);
+    } else if (p.carnivore && feedProgress(plot) < 1) {
+      const d = dietSummary(plot.diet);
+      const eaten = plot.fed || 0;
+      ui.setPrompt(`${p.name} — <span style="color:#ff6b6b">hungry</span>
+        <span class="sub">🪤 eaten ${eaten}/${p.eats} bugs${d ? ` · mostly ${d.main.name}s · fruit worth ×${dietBonus(plot.diet).toFixed(2)}` : ' · lure a raid to it'}</span>`);
     } else {
       const wait = Math.ceil(cycleSeconds(plot, i) * (1 - growth(plot, i)));
       const verb = isRegrowing(plot) ? 'regrowing' : 'grown';
@@ -1213,6 +1252,7 @@ function tick() {
   updateRaids();
   bugs.update(dt, t, camera);
   updateTurrets(dt);
+  updateCarnivores(dt);
   fireCooldown = Math.max(0, fireCooldown - dt);
   if (player.weapon && using) fireWeapon();
   player.swing = Math.max(0, player.swing - dt * 4);
@@ -1262,6 +1302,7 @@ function tick() {
       }
     }
     applyMutation(view.crop, done ? data.mut : null, mutationColor);
+    if (PLANTS_BY_ID[data.plantId].carnivore) setCarnivoreFruit(view.crop, data.diet);
     // First cycle grows from a sprout; regrowth keeps the established plant and
     // just fills the fruit back in.
     const floor = data.taken > 0 ? 0.82 : 0.28;
@@ -1276,7 +1317,8 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { build: BUILD_LABEL, sky, petPack, callPets, feedNearestPet, doGoldenHarvest, updateWeather, sellDevice, buyEgg, hatchEgg, buyUpgrade, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
+window.game = { build: BUILD_LABEL, sky, petPack, callPets, updateCarnivores,
+                growth, isRipe, feedProgress, cropValue, fmt, PLANTS_BY_ID, feedNearestPet, doGoldenHarvest, updateWeather, sellDevice, buyEgg, hatchEgg, buyUpgrade, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
                 placeSprinkler, buyWeapon, buyTurret, placeTurret, bugs, startRaid, fireWeapon,
                 waterPlot, refreshSprinklers, plotSpeed, state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
 
