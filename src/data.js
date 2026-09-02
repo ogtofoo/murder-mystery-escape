@@ -173,10 +173,33 @@ export function rollBug(level) {
 // ---- Pets --------------------------------------------------------------
 
 /**
- * Pets hatch from eggs, follow you around and help out. Each has one ability
- * whose strength scales with its level, and up to PET_SLOTS can be out at once.
+ * Pets hatch from eggs, roam the garden and help out. Each has one ability
+ * whose strength scales with its level and how happy it is. Keep as many out
+ * as you like.
  */
-export const PET_SLOTS = 3;
+export const PET_SLOTS = Infinity;
+
+/** Happiness a seed of each tier gives when you feed it to a pet. */
+export const TREAT_VALUE = {
+  common: 6, uncommon: 11, rare: 18, legendary: 26,
+  mythic: 36, prismatic: 48, transcendent: 62, super: 80,
+};
+
+/** Happiness ebbs away slowly, so pets like being fed now and then. */
+export const HAPPY_DECAY_PER_MIN = 0.7;
+export const HAPPY_MAX = 100;
+
+/** A happy pet works harder: up to +60% on its ability at full happiness. */
+export function happyBonus(happy) { return 1 + 0.6 * (Math.min(HAPPY_MAX, happy || 0) / HAPPY_MAX); }
+
+export function moodOf(happy) {
+  const h = happy || 0;
+  if (h >= 85) return { icon: '😍', word: 'overjoyed' };
+  if (h >= 60) return { icon: '😄', word: 'happy' };
+  if (h >= 35) return { icon: '🙂', word: 'content' };
+  if (h >= 12) return { icon: '😐', word: 'peckish' };
+  return { icon: '🥺', word: 'hungry' };
+}
 
 export const PETS = [
   { id:'snail',   name:'Garden Snail', tier:'common',       ability:'growth',  power:0.05, shape:'snail',  colors:[0xa1887f, 0xc5e1a5] },

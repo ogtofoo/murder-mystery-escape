@@ -5,6 +5,7 @@ import { PLOT_COUNT, PLANTS_BY_ID, plotCost, plotLayout, LAYOUT_ID,
          BUGS_BY_ID, BUG_SLOW, TROPHIES, goldenFor, goldenMultiplier,
          GOLDEN_MIN_EARNED, WEATHERS, mutationMultiplier, VARIANTS_BY_ID, MARKS,
          PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS_BY_ID,
+         TREAT_VALUE, HAPPY_MAX, HAPPY_DECAY_PER_MIN, happyBonus,
          UPGRADES, UPGRADES_BY_ID, upgradeCost, rankFor } from './data.js';
 
 const SAVE_KEY = 'sheckle-garden-save-v1';
@@ -78,10 +79,11 @@ function sanitize(raw) {
     uid: p.uid, id: p.id,
     level: Math.min(PET_MAX_LEVEL, Math.max(1, Math.floor(p.level) || 1)),
     xp: Math.max(0, p.xp || 0),
+    happy: Math.min(HAPPY_MAX, Math.max(0, p.happy || 0)),
   })) : [];
   s.nextPetUid = Math.max(1, Number(raw.nextPetUid) || 1, ...s.pets.map(p => (p.uid || 0) + 1));
   s.equipped = Array.isArray(raw.equipped)
-    ? raw.equipped.filter(uid => s.pets.some(p => p.uid === uid)).slice(0, PET_SLOTS) : [];
+    ? raw.equipped.filter(uid => s.pets.some(p => p.uid === uid)) : [];
   s.eggs = Array.isArray(raw.eggs)
     ? raw.eggs.filter(e => EGGS_BY_ID[e?.id] && Number.isFinite(e.readyAt)).slice(0, 12) : [];
   s.upgrades = {};
@@ -229,21 +231,41 @@ export function equippedPets() {
   return state.equipped.map(uid => state.pets.find(p => p.uid === uid)).filter(Boolean);
 }
 
-/** Total of one pet ability across everything you have out. */
+/** Total of one pet ability across everything you have out, happiness included. */
 export function petPower(ability) {
   let sum = 0;
   for (const owned of equippedPets()) {
     const spec = PETS_BY_ID[owned.id];
-    if (spec?.ability === ability) sum += spec.power * owned.level;
+    if (spec?.ability === ability) sum += spec.power * owned.level * happyBonus(owned.happy);
   }
   return sum;
+}
+
+/** Feed a seed to a pet. Rarer seeds make it much happier. */
+export function feedPet(uid, seedId) {
+  const owned = state.pets.find(p => p.uid === uid);
+  const plant = PLANTS_BY_ID[seedId];
+  if (!owned || !plant || seedCount(seedId) <= 0) return null;
+  takeSeed(seedId);
+  const gain = TREAT_VALUE[plant.tier] ?? 5;
+  const before = owned.happy || 0;
+  owned.happy = Math.min(HAPPY_MAX, before + gain);
+  owned.xp += gain * 4;                       // a treat is worth a chunk of experience
+  state.stats.treats = (state.stats.treats || 0) + 1;
+  return { gain: owned.happy - before, happy: owned.happy, plant };
+}
+
+/** Pets get peckish over time. */
+export function decayHappiness(seconds) {
+  const drop = (HAPPY_DECAY_PER_MIN / 60) * seconds;
+  for (const p of state.pets) if (p.happy > 0) p.happy = Math.max(0, p.happy - drop);
 }
 
 export function petHarvestRange() {
   let best = 0;
   for (const owned of equippedPets()) {
     const spec = PETS_BY_ID[owned.id];
-    if (spec?.ability === 'harvest') best = Math.max(best, spec.power + owned.level * 0.4);
+    if (spec?.ability === 'harvest') best = Math.max(best, (spec.power + owned.level * 0.4) * happyBonus(owned.happy));
   }
   return best;
 }

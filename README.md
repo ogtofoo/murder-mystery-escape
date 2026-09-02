@@ -25,6 +25,7 @@ python3 -m http.server 8777
 | `1`–`9` / `Q` | Pick a seed from the hotbar |
 | `G` | Take out / put away the shovel |
 | Hold `E` | With the shovel out: dig up the plant you're looking at |
+| `C` / `T` | Whistle your pets over / feed the nearest one a seed |
 | `B` | Seed shop (seeds, packs, almanac) |
 | `V` | Toggle **first person ↔ third person** (first person uses a wider 90° field of view) |
 | `Esc` | Close the shop / back to the menu |
@@ -47,6 +48,7 @@ the game switches its on-screen hints over as soon as it sees one.
 | D-pad or left stick | Move the highlight through the shop list |
 | `R3` | Snap the third-person camera close / far |
 | D-pad ↓ | Take out / put away the shovel (hold `A` to dig) |
+| D-pad → / `L3` | Feed the nearest pet / whistle them over |
 | `Start` | Menu |
 
 The shop, the pack reveal and the title screen are all fully navigable with the pad, and it
@@ -162,9 +164,16 @@ A plain tomato sells for ₪180. A Rainbow Shocked one sells for ₪450,000.
 
 ### 🐾 Pets
 
-Buy an egg, keep gardening, and it hatches on its own into one of ten companions that follow
-you around the field. Three can be out at once, and they level up just by being with you —
-every level makes their ability stronger.
+Buy an egg, keep gardening, and it hatches on its own into one of ten companions. **Keep as
+many out as you like** — they wander your garden on their own rather than trailing behind you,
+so you can actually watch them potter about. Press `C` to whistle and they all come running.
+
+**Feed them.** Hold any seed and press `T` next to a pet to give it a treat. The rarer the seed,
+the happier it gets: a carrot is +6, a SUPERFRUIT seed is +80 out of 100. A happy pet moves
+faster, learns faster, and works **up to 60% harder** at its ability — and happiness ebbs away
+slowly, so it's worth topping up. It's also a good use for the drawer full of common seeds.
+
+Pets level up just by being out, and every level makes their ability stronger.
 
 | Pet | Tier | Does |
 | --- | --- | --- |

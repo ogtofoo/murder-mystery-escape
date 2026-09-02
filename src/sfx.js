@@ -39,6 +39,11 @@ export const sfx = {
   },
   weather() { [400, 500, 620].forEach((n, i) => beep(n, 0.22, 'sine', 0.035, i * 0.12)); },
   thunder() { beep(70, 0.5, 'sawtooth', 0.07); beep(48, 0.7, 'triangle', 0.06, 0.05); },
+  whistle() { beep(880, 0.12, 'sine', 0.05); beep(1320, 0.14, 'sine', 0.045, 0.1); },
+  feed(tier = 0) {
+    const base = 520 + tier * 60;
+    [1, 1.25, 1.5].forEach((k, i) => beep(base * k, 0.12, 'triangle', 0.05, i * 0.07));
+  },
   dig() { beep(120, 0.18, 'sawtooth', 0.06); beep(90, 0.22, 'triangle', 0.05, 0.08); },
   harvest(tier = 0) {
     const base = 440 + tier * 40;

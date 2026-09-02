@@ -5,14 +5,15 @@ import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollPack, plotCost, PLOT_COUNT, refund
          CANS_BY_ID, SPRINKLERS_BY_ID, TURRETS_BY_ID, WEAPONS_BY_ID, plotLayout,
          raidLevel, BUG_SLOW, TROPHIES, goldenMultiplier, WEATHERS, rollWeather, rollMutation,
          mutationMultiplier, mutationName, mutationColor,
-         PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS_BY_ID, rollPet,
+         PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS_BY_ID, rollPet, moodOf, TREAT_VALUE,
          UPGRADES_BY_ID, upgradeCost } from './data.js';
 import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount,
          growth, isRipe, isRegrowing, harvestsLeft, cycleSeconds,
          refreshSprinklers, plotSpeed, sprinklerSpeed, sprinklerAt, stockCount, addSprinkler, takeSprinkler,
          bestCan, bugsOn, addBug, removeBug, turretAt, deviceAt,
          cropValue, goldenPending, canGoldenHarvest, goldenHarvest, claimTrophies, weatherSpeed,
-         equippedPets, petPower, petHarvestRange, luckMultiplier, upgradeLevel, nextUpgradeCost, rank } from './state.js';
+         equippedPets, petPower, petHarvestRange, luckMultiplier, upgradeLevel, nextUpgradeCost, rank,
+         feedPet, decayHappiness } from './state.js';
 import { buildWorld } from './world.js';
 import { buildPlant, animatePlant, applyMutation } from './plants.js';
 import { buildSprinkler, animateSprinkler, buildCan, waterBurst,
@@ -69,11 +70,14 @@ const ui = new UI({
   buyUpgrade: id => buyUpgrade(id),
   equipPet: uid => {
     const at = state.equipped.indexOf(uid);
-    if (at >= 0) state.equipped.splice(at, 1);
-    else if (state.equipped.length < PET_SLOTS) state.equipped.push(uid);
-    else { ui.toast(`Only ${PET_SLOTS} pets can be out at once.`, 'bad'); return; }
+    if (at >= 0) state.equipped.splice(at, 1); else state.equipped.push(uid);
     syncPets(); save();
   },
+  equipAll: out => {
+    state.equipped = out ? state.pets.map(p => p.uid) : [];
+    syncPets(); save();
+  },
+  callPets: () => callPets(),
   releasePet: uid => {
     const i = state.pets.findIndex(p => p.uid === uid);
     if (i < 0) return;
@@ -536,7 +540,37 @@ function updateEffects(dt) {
 
 // ---------------------------------------------------------------- pets
 
-const petPack = new PetPack(scene);
+const petPack = new PetPack(scene, 10);
+let petCallUntil = 0;
+
+/** Whistle: every pet drops what it's doing and trots over. */
+function callPets() {
+  if (!petPack.pets.length) { ui.toast('No pets are out right now.', 'bad'); sfx.deny(); return; }
+  petCallUntil = performance.now() + 6000;
+  ui.toast(`🐾 Here, ${petPack.pets.length === 1 ? 'boy' : 'everyone'}!`);
+  sfx.whistle();
+}
+
+/** Offer the selected seed to whichever pet is closest. */
+function feedNearestPet() {
+  const seedId = ui.selected;
+  const plant = PLANTS_BY_ID[seedId];
+  if (!plant) { ui.toast('Pick a seed first (1–9) — pets love a treat.', 'bad'); sfx.deny(); return; }
+  if (seedCount(seedId) <= 0) { ui.toast('You have none of those seeds.', 'bad'); sfx.deny(); return; }
+  const pet = petPack.nearest(player.pos.x, player.pos.z, 4.5);
+  if (!pet) { ui.toast('Get closer to a pet to feed it (C calls them over).', 'bad'); sfx.deny(); return; }
+
+  const res = feedPet(pet.uid, seedId);
+  if (!res) return;
+  const mood = moodOf(res.happy);
+  petPack.celebrate(pet);
+  for (let i = 0; i < 3; i++) burst({ x: pet.mesh.position.x, z: pet.mesh.position.z }, 0xff6ea8);
+  ui.toast(`${mood.icon} ${pet.spec.name} ate the ${plant.name} seed — <b>+${Math.round(res.gain)} happiness</b> (${Math.round(res.happy)}/100, ${mood.word})`, 'gold');
+  sfx.feed(TIERS[plant.tier].order);
+  gamepad.rumble(0.3, 120);
+  ui.refresh();
+  save();
+}
 
 function syncPets() {
   petPack.sync(equippedPets());
@@ -560,7 +594,7 @@ function hatchEgg(index) {
   const spec = rollPet(egg.weights);
   const pet = { uid: state.nextPetUid++, id: spec.id, level: 1, xp: 0 };
   state.pets.push(pet);
-  if (state.equipped.length < PET_SLOTS) state.equipped.push(pet.uid);
+  state.equipped.push(pet.uid);
   state.stats.hatched = (state.stats.hatched || 0) + 1;
   syncPets();
   ui.showHatch(spec);
@@ -575,17 +609,20 @@ function updatePets(dt, t) {
   for (let i = state.eggs.length - 1; i >= 0; i--) {
     if (Date.now() >= state.eggs[i].readyAt) hatchEgg(i);
   }
-  petPack.update(dt, t, player.pos, player.yaw);
+  const happiness = {};
+  for (const p of state.pets) happiness[p.uid] = p.happy || 0;
+  petPack.update(dt, t, player.pos, player.yaw, performance.now() < petCallUntil, happiness);
 
   petClock += dt;
   if (petClock < 1) return;
   const seconds = petClock;
   petClock = 0;
 
+  decayHappiness(seconds);
   let levelled = false;
   for (const owned of equippedPets()) {
     if (owned.level >= PET_MAX_LEVEL) continue;
-    owned.xp += seconds;
+    owned.xp += seconds * (1 + (owned.happy || 0) / 100);   // happy pets learn faster
     while (owned.level < PET_MAX_LEVEL && owned.xp >= petXpFor(owned.level)) {
       owned.xp -= petXpFor(owned.level);
       owned.level++;
@@ -808,16 +845,29 @@ function nearStall() {
 
 function updatePrompt() {
   if (ui.modalOpen) { ui.setPrompt(''); return; }
+
+  // A pet standing next to you is worth mentioning whatever else is going on.
+  const nearPet = petPack.nearest(player.pos.x, player.pos.z, 3.2);
+  let petLine = '';
+  if (nearPet) {
+    const owned = state.pets.find(p => p.uid === nearPet.uid);
+    const mood = moodOf(owned?.happy);
+    const seed = PLANTS_BY_ID[ui.selected];
+    petLine = seed && seedCount(seed.id) > 0
+      ? `<span class="sub">${mood.icon} <b>[T]</b> feed ${nearPet.spec.name} a ${seed.name} seed · +${TREAT_VALUE[seed.tier]} happiness</span>`
+      : `<span class="sub">${mood.icon} ${nearPet.spec.name} is ${mood.word} (${Math.round(owned?.happy || 0)}/100) — hold a seed and press T</span>`;
+  }
+  const show = html => ui.setPrompt(html ? html + petLine : petLine);
   if (target >= 0) {
     const i = target;
     if (i >= state.owned) {
       if (i === state.owned) {
         const c = plotCost(state.owned);
         const can = state.money >= c;
-        ui.setPrompt(`<b>[E]</b> Till this plot — <span class="coin">₪${fmt(c)}</span>
+        show(`<b>[E]</b> Till this plot — <span class="coin">₪${fmt(c)}</span>
           <span class="sub">${can ? 'You can afford it' : `You have ₪${fmt(state.money)}`}</span>`);
       } else {
-        ui.setPrompt(`Overgrown ground<span class="sub">Expand outward from the edge of your garden first</span>`);
+        show(`Overgrown ground<span class="sub">Expand outward from the edge of your garden first</span>`);
       }
       return;
     }
@@ -826,7 +876,7 @@ function updatePrompt() {
       const p = PLANTS_BY_ID[plot.plantId];
       const left = harvestsLeft(plot);
       const pct = Math.round(digProgress * 100);
-      ui.setPrompt(`<b>[Hold E]</b> Dig up ${p.name}
+      show(`<b>[Hold E]</b> Dig up ${p.name}
         <span class="sub">${left > 1 ? `throws away ${left} remaining harvests` : 'clears the plot'}</span>
         <span class="digbar"><i style="width:${pct}%"></i></span>`);
       return;
@@ -836,24 +886,24 @@ function updatePrompt() {
       const detail = dev.speed
         ? `${dev.speed}× growth in range`
         : `${fmt(dev.damage)} damage · ${dev.rate}/s · ${dev.range > 100 ? 'whole garden' : dev.range + 'm'}`;
-      ui.setPrompt(`${dev.name} <span class="sub" style="color:${TIERS[dev.tier].css}">${detail} · G + hold E to pick up</span>`);
+      show(`${dev.name} <span class="sub" style="color:${TIERS[dev.tier].css}">${detail} · G + hold E to pick up</span>`);
       return;
     }
     if (!plot) {
       const tur = TURRETS_BY_ID[ui.selected];
       if (tur) {
-        ui.setPrompt(`<b>[E]</b> Place ${tur.name}
+        show(`<b>[E]</b> Place ${tur.name}
           <span class="sub">${fmt(tur.damage)} damage at ${tur.rate}/s · ${tur.range > 100 ? 'covers the whole garden' : 'range ' + tur.range + 'm'} · uses up this plot</span>`);
         return;
       }
       const spr = SPRINKLERS_BY_ID[ui.selected];
       if (spr) {
-        ui.setPrompt(`<b>[E]</b> Place ${spr.name}
+        show(`<b>[E]</b> Place ${spr.name}
           <span class="sub">${spr.speed}× growth within ${spr.radius > 100 ? 'the whole garden' : spr.radius.toFixed(1) + 'm'} · uses up this plot</span>`);
         return;
       }
       const sel = ui.selected ? PLANTS_BY_ID[ui.selected] : null;
-      ui.setPrompt(sel
+      show(sel
         ? `<b>[E]</b> Plant ${sel.name} <span class="sub">${seedCount(sel.id)} seed${seedCount(sel.id) === 1 ? '' : 's'} left · 1–9 to switch</span>`
         : `Empty plot <span class="sub">No seeds — press B to visit the shop</span>`);
       return;
@@ -862,7 +912,7 @@ function updatePrompt() {
       const can = bestCan();
       const p = PLANTS_BY_ID[plot.plantId];
       const already = plot.watered || isRipe(plot, i);
-      ui.setPrompt(already
+      show(already
         ? `${p.name} <span class="sub">${isRipe(plot, i) ? 'ready to harvest — put the can away (F)' : 'already watered this cycle'}</span>`
         : `<b>[E]</b> Water ${p.name} <span class="sub">+${Math.round(can.boost * 100)}% growth${can.radius ? ' to everything nearby' : ''}</span>`);
       return;
@@ -876,7 +926,7 @@ function updatePrompt() {
         after > 0 ? ` · regrows ${after} more time${after === 1 ? '' : 's'}` : ' · last picking';
       const tag = mut ? `<b style="color:${'#' + mutationColor(mut).toString(16).padStart(6, '0')}">${mutationName(mut)}</b> ` : '';
       const x = mut ? ` <b>×${fmt(mutationMultiplier(mut))}</b>` : '';
-      ui.setPrompt(`<b>[E]</b> Harvest ${tag}${p.name}${x} — <span class="coin">₪${fmt(cropValue(p, mut))}</span>
+      show(`<b>[E]</b> Harvest ${tag}${p.name}${x} — <span class="coin">₪${fmt(cropValue(p, mut))}</span>
         <span class="sub" style="color:${TIERS[p.tier].css}">${TIERS[p.tier].name}${more}</span>`);
     } else {
       const wait = Math.ceil(cycleSeconds(plot, i) * (1 - growth(plot, i)));
@@ -888,16 +938,27 @@ function updatePrompt() {
       const wet = spr > 1 ? ` · <span style="color:#8fd8ff">${spr}× sprinkler</span>` : '';
       const sky = ws > 1 ? ` · <span style="color:#a8d8ff">${WEATHERS[state.weather].icon} ${ws}× weather</span>` : '';
       const chewed = infest ? ` · <span style="color:#ff7b6b">🐛 ${infest} bug${infest === 1 ? '' : 's'} slowing it</span>` : '';
-      ui.setPrompt(`${p.name} — ${Math.floor(growth(plot, i) * 100)}% ${verb}
+      show(`${p.name} — ${Math.floor(growth(plot, i) * 100)}% ${verb}
         <span class="sub">ready in ${wait}s${tail}${wet}${sky}${chewed}</span>`);
     }
     return;
   }
   if (nearStall()) {
-    ui.setPrompt(`<b>[E]</b> Browse the seed shop <span class="sub">seeds, packs and the almanac</span>`);
+    show(`<b>[E]</b> Browse the seed shop <span class="sub">seeds, packs and the almanac</span>`);
     return;
   }
-  ui.setPrompt('');
+  const pet = petPack.nearest(player.pos.x, player.pos.z, 3.2);
+  if (pet) {
+    const owned = state.pets.find(p => p.uid === pet.uid);
+    const mood = moodOf(owned?.happy);
+    const seed = PLANTS_BY_ID[ui.selected];
+    const treat = seed ? TREAT_VALUE[seed.tier] : 0;
+    show(seed && seedCount(seed.id) > 0
+      ? `<b>[T]</b> Feed ${seed.name} seed to ${pet.spec.name} <span class="sub">${mood.icon} ${Math.round(owned?.happy || 0)}/100 · this treat is worth +${treat}</span>`
+      : `${pet.spec.name} <span class="sub">${mood.icon} ${mood.word} · ${Math.round(owned?.happy || 0)}/100 · hold a seed and press T to feed it</span>`);
+    return;
+  }
+  show('');
 }
 
 function interact() {
@@ -944,6 +1005,8 @@ window.addEventListener('keydown', e => {
     case 'KeyG': toggleShovel(); break;
     case 'KeyF': toggleCan(); break;
     case 'KeyR': toggleWeapon(); break;
+    case 'KeyC': callPets(); break;
+    case 'KeyT': feedNearestPet(); break;
     default:
       if (/^Digit[1-9]$/.test(e.code)) ui.selectIndex(Number(e.code.slice(5)) - 1);
   }
@@ -1045,6 +1108,8 @@ function updateGamepad(dt) {
   if (pressed.has(BTN.DOWN)) toggleShovel();
   if (pressed.has(BTN.UP)) toggleCan();
   if (pressed.has(BTN.LEFT)) toggleWeapon();
+  if (pressed.has(BTN.RIGHT)) feedNearestPet();
+  if (pressed.has(BTN.L3)) callPets();
   if (pressed.has(BTN.R3)) { player.camDistance = player.camDistance > 4 ? 3.2 : 6.0; }
   if (pressed.has(BTN.START) || pressed.has(BTN.BACK)) { document.exitPointerLock?.(); ui.showMenu(true); }
 }
@@ -1211,7 +1276,7 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { build: BUILD_LABEL, sky, petPack, doGoldenHarvest, updateWeather, sellDevice, buyEgg, hatchEgg, buyUpgrade, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
+window.game = { build: BUILD_LABEL, sky, petPack, callPets, feedNearestPet, doGoldenHarvest, updateWeather, sellDevice, buyEgg, hatchEgg, buyUpgrade, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
                 placeSprinkler, buyWeapon, buyTurret, placeTurret, bugs, startRaid, fireWeapon,
                 waterPlot, refreshSprinklers, plotSpeed, state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
 

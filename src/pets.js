@@ -152,11 +152,12 @@ export function buildPet(spec) {
   return g;
 }
 
-/** Keeps the equipped pets trailing the player in a loose formation. */
+/** Pets roam the garden on their own, and come running when you call. */
 export class PetPack {
-  constructor(scene) {
+  constructor(scene, roamRadius = 9) {
     this.scene = scene;
-    this.pets = [];          // { uid, mesh, spec }
+    this.roamRadius = roamRadius;
+    this.pets = [];          // { uid, mesh, spec, mode, target, wait }
   }
 
   /** Rebuild the models to match the equipped list. */
@@ -165,38 +166,88 @@ export class PetPack {
     for (const p of [...this.pets]) {
       if (!want.includes(p.uid)) { this.scene.remove(p.mesh); this.pets.splice(this.pets.indexOf(p), 1); }
     }
-    equipped.forEach((entry, i) => {
+    equipped.forEach(entry => {
       if (this.pets.some(p => p.uid === entry.uid)) return;
       const spec = PETS_BY_ID[entry.id];
       if (!spec) return;
       const mesh = buildPet(spec);
-      mesh.position.set(0, 0, 0);
+      const a = Math.random() * Math.PI * 2, r = Math.random() * this.roamRadius;
+      mesh.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
       this.scene.add(mesh);
-      this.pets.push({ uid: entry.uid, mesh, spec, slot: i });
+      this.pets.push({ uid: entry.uid, mesh, spec, mode: 'roam', target: null, wait: Math.random() * 2 });
     });
-    this.pets.forEach((p, i) => { p.slot = i; });
   }
 
-  update(dt, t, playerPos, playerYaw) {
+  /** Nearest pet to a point, for feeding. */
+  nearest(x, z, radius = 4) {
+    let best = null, bestD = radius;
+    for (const p of this.pets) {
+      const d = Math.hypot(p.mesh.position.x - x, p.mesh.position.z - z);
+      if (d < bestD) { best = p; bestD = d; }
+    }
+    return best;
+  }
+
+  /** Make one pet bounce with delight. */
+  celebrate(pet) {
+    pet.hop = 1;
+    pet.mode = 'come';
+    pet.wait = 4;
+  }
+
+  pickRoamTarget(p) {
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.sqrt(Math.random()) * this.roamRadius;
+    p.target = { x: Math.cos(a) * r, z: Math.sin(a) * r };
+    p.wait = 1.5 + Math.random() * 4;
+  }
+
+  /**
+   * @param called true while the player is calling them over
+   * @param happiness uid -> 0..100, drives how bouncy they are
+   */
+  update(dt, t, playerPos, playerYaw, called = false, happiness = {}) {
     this.pets.forEach((p, i) => {
       const u = p.mesh.userData;
-      // Fan out behind and beside the gardener.
-      const side = (i - (this.pets.length - 1) / 2) * 1.1;
-      const back = 1.5 + Math.abs(side) * 0.25;
-      const sin = Math.sin(playerYaw), cos = Math.cos(playerYaw);
-      const tx = playerPos.x - sin * back - cos * side;
-      const tz = playerPos.z - cos * back + sin * side;
-      const ty = u.flyer ? 1.25 + Math.sin(t * 2.2 + u.phase) * 0.16 : 0;
+      const happy = (happiness[p.uid] || 0) / 100;
 
-      const k = 1 - Math.exp(-4.5 * dt);
-      p.mesh.position.x += (tx - p.mesh.position.x) * k;
-      p.mesh.position.z += (tz - p.mesh.position.z) * k;
-      p.mesh.position.y += (ty - p.mesh.position.y) * k;
+      if (called && p.mode !== 'eat') p.mode = 'come';
+      if (p.mode === 'come') {
+        // Gather in a ring in front of the gardener so they stay in view.
+        const a = playerYaw + Math.PI + (i - (this.pets.length - 1) / 2) * 0.6;
+        p.target = { x: playerPos.x + Math.sin(a) * 2.2, z: playerPos.z + Math.cos(a) * 2.2 };
+        if (!called) {
+          p.wait -= dt;
+          if (p.wait <= 0) { p.mode = 'roam'; this.pickRoamTarget(p); }
+        }
+      } else {
+        p.wait -= dt;
+        if (!p.target || p.wait <= 0) this.pickRoamTarget(p);
+      }
 
-      const dx = tx - p.mesh.position.x, dz = tz - p.mesh.position.z;
-      const moving = Math.hypot(dx, dz) > 0.05;
-      if (moving) p.mesh.rotation.y = Math.atan2(dx, dz);
-      if (!u.flyer && moving) p.mesh.position.y = Math.abs(Math.sin(t * 9 + u.phase)) * 0.14;
+      const dx = p.target.x - p.mesh.position.x;
+      const dz = p.target.z - p.mesh.position.z;
+      const dist = Math.hypot(dx, dz);
+      const stop = p.mode === 'come' ? 0.5 : 0.35;
+      const speed = (p.mode === 'come' ? 4.2 : 1.5) * (1 + happy * 0.35);
+
+      if (dist > stop) {
+        p.mesh.position.x += (dx / dist) * speed * dt;
+        p.mesh.position.z += (dz / dist) * speed * dt;
+        p.mesh.rotation.y = dampAngle(p.mesh.rotation.y, Math.atan2(dx, dz), 8, dt);
+      } else if (p.mode === 'come') {
+        // Turn to face you once they arrive.
+        const fx = playerPos.x - p.mesh.position.x, fz = playerPos.z - p.mesh.position.z;
+        p.mesh.rotation.y = dampAngle(p.mesh.rotation.y, Math.atan2(fx, fz), 6, dt);
+      }
+
+      // Bobbing, hopping and the little jump after a treat.
+      p.hop = Math.max(0, (p.hop || 0) - dt * 1.6);
+      const moving = dist > stop;
+      const base = u.flyer ? 1.2 + Math.sin(t * 2.2 + u.phase) * 0.16 : 0;
+      const hop = moving && !u.flyer ? Math.abs(Math.sin(t * (7 + happy * 4) + u.phase)) * 0.14 : 0;
+      const joy = p.hop > 0 ? Math.abs(Math.sin(p.hop * 12)) * 0.55 * p.hop : 0;
+      p.mesh.position.y = base + hop + joy;
 
       for (const w of u.wings) w.rotation.z = Math.sin(t * (u.flyer ? 22 : 8) + u.phase) * 0.5 * w.userData.wing;
       for (const sp of u.spinners) sp.rotation.y += sp.userData.spin * dt;
@@ -207,4 +258,9 @@ export class PetPack {
     for (const p of this.pets) this.scene.remove(p.mesh);
     this.pets = [];
   }
+}
+
+function dampAngle(current, target, lambda, dt) {
+  const diff = ((target - current + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+  return current + diff * (1 - Math.exp(-lambda * dt));
 }

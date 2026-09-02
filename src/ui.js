@@ -5,6 +5,7 @@ import { PLANTS, PLANTS_BY_ID, PACKS, TIERS, TIER_ORDER, PLOT_COUNT, fmt, refund
          WEAPONS, TURRETS, TURRETS_BY_ID, TROPHIES, GOLDEN_BONUS, GOLDEN_MIN_EARNED,
          goldenMultiplier, WEATHERS, VARIANTS, MARKS, mutationMultiplier,
          PETS, PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS, ABILITY_TEXT,
+         moodOf, happyBonus, TREAT_VALUE,
          UPGRADES, upgradeCost, rankFor, nextRank } from './data.js';
 import { state, seedCount, stockCount, goldenPending, canGoldenHarvest, trophyProgress, cropValue,
          upgradeLevel, nextUpgradeCost, equippedPets, luckMultiplier } from './state.js';
@@ -449,8 +450,9 @@ export class UI {
 
   renderPets() {
     const out = state.equipped;
-    let html = `<div class="tierhead">Eggs — pets follow you around and help. ${out.length}/${PET_SLOTS} out ·
-      mutation luck ×${luckMultiplier().toFixed(1)}</div>`;
+    let html = `<div class="tierhead">Eggs — pets roam your garden and help out. ${out.length} of ${state.pets.length} out ·
+      mutation luck ×${luckMultiplier().toFixed(1)} ·
+      <b>C</b> calls them over, <b>T</b> feeds the nearest one the seed you're holding</div>`;
     for (const e of EGGS) {
       html += `<div class="row">
         <div class="stripe" style="background:linear-gradient(${Object.keys(e.weights).map(t => TIERS[t].css).join(',')})"></div>
@@ -465,7 +467,10 @@ export class UI {
       </div>`;
     }
 
-    html += `<div class="tierhead">Your pets (${state.pets.length})</div>`;
+    html += `<div class="tierhead">Your pets (${state.pets.length}) —
+      rarer seeds make better treats, and a happy pet works up to 60% harder
+      <button class="buy sell" id="alloutbtn" style="margin-left:8px">take all out</button>
+      <button class="buy sell" id="allinbtn">put all away</button></div>`;
     if (!state.pets.length) {
       html += `<div class="row"><div class="stripe" style="background:#666"></div>
         <div><div class="name">No pets yet</div>
@@ -482,7 +487,11 @@ export class UI {
         html += `<div class="pet ${isOut ? 'out' : ''}" style="${isOut ? `border-color:${t.css}` : ''}">
           <div class="tr" style="color:${t.css}">${t.name}</div>
           <div class="nm">${spec.name} <span style="opacity:.6;font-size:12px">L${owned.level}</span></div>
-          <div class="ab">${ABILITY_TEXT[spec.ability](spec, owned.level)}</div>
+          <div class="ab">${ABILITY_TEXT[spec.ability](spec, owned.level)}${
+            owned.happy >= 1 ? ` <span style="color:var(--good)">×${happyBonus(owned.happy).toFixed(2)} happy</span>` : ''}</div>
+          <div style="font-size:12px;opacity:.8;margin-bottom:4px">${moodOf(owned.happy).icon} ${
+            moodOf(owned.happy).word} · ${Math.round(owned.happy || 0)}/100</div>
+          <div class="xp"><i style="width:${Math.round(owned.happy || 0)}%;background:#ff6ea8"></i></div>
           <div class="xp"><i style="width:${pct}%"></i></div>
           <div class="btns">
             <button class="${isOut ? '' : 'go'}" data-pet="${owned.uid}">${isOut ? 'Put away' : 'Take out'}</button>
@@ -493,6 +502,8 @@ export class UI {
       html += '</div>';
     }
     this.el.body.innerHTML = html;
+    this.el.body.querySelector('#alloutbtn')?.addEventListener('click', () => { this.hooks.equipAll(true); this.renderShop(); });
+    this.el.body.querySelector('#allinbtn')?.addEventListener('click', () => { this.hooks.equipAll(false); this.renderShop(); });
     for (const b of this.el.body.querySelectorAll('[data-egg]')) {
       b.addEventListener('click', () => this.hooks.buyEgg(b.dataset.egg));
     }

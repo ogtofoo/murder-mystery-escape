@@ -1,3 +1,3 @@
 // Bumped on every push, so it's obvious which version is actually running.
-export const BUILD = { number: 15, date: '2026-09-01' };
+export const BUILD = { number: 16, date: '2026-09-01' };
 export const BUILD_LABEL = `build ${BUILD.number} · ${BUILD.date}`;
