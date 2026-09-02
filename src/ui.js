@@ -3,7 +3,7 @@
 import { PLANTS, PLANTS_BY_ID, PACKS, TIERS, TIER_ORDER, PLOT_COUNT, fmt, refundValue, SEED_REFUND,
          CANS, SPRINKLERS, SPRINKLERS_BY_ID, sprinklerCoverage,
          WEAPONS, TURRETS, TURRETS_BY_ID, TROPHIES, GOLDEN_BONUS, GOLDEN_MIN_EARNED,
-         goldenMultiplier } from './data.js';
+         goldenMultiplier, WEATHERS, VARIANTS, MARKS, mutationMultiplier } from './data.js';
 import { state, seedCount, stockCount, goldenPending, canGoldenHarvest, trophyProgress, cropValue } from './state.js';
 
 const $ = sel => document.querySelector(sel);
@@ -26,7 +26,7 @@ export class UI {
       hotbar: $('#hotbar'), prompt: $('#prompt'), toasts: $('#toasts'),
       shop: $('#shop'), body: $('#shopbody'), overlay: $('#overlay'), plotline: $('#plotline'),
       packmodal: $('#packmodal'), packcards: $('#packcards'), packtitle: $('#packtitle'),
-      bossbar: $('#bossbar'), goldenline: $('#goldenline'),
+      bossbar: $('#bossbar'), goldenline: $('#goldenline'), skyline: $('#skyline'),
     };
 
     $('#playbtn').addEventListener('click', () => this.hooks.play());
@@ -121,6 +121,17 @@ export class UI {
     this.el.bossbar.querySelector('.bossname').textContent = boss.name;
     this.el.bossbar.querySelector('.bosstrack i').style.width =
       `${Math.max(0, (boss.hp / boss.maxHp) * 100)}%`;
+  }
+
+  /** Clock and weather in the corner. */
+  setSky(phase, weather) {
+    const w = WEATHERS[weather] || WEATHERS.clear;
+    const label = `${this.clock ?? ''}`;
+    void label;
+    const mins = Math.floor(phase * 24 * 60);
+    const time = `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+    const txt = `${time} · <span class="wx">${w.icon} ${w.name}${w.growth > 1 ? ` ${w.growth}×` : ''}</span>`;
+    if (txt !== this._skyTxt) { this._skyTxt = txt; this.el.skyline.innerHTML = txt; }
   }
 
   setBugCount(n) {
@@ -346,10 +357,13 @@ export class UI {
             takes up the plot it stands on</div>
         </div>
         <div class="own">${have ? `in shed<br><b>${have}</b>` : ''}${placed ? `<br>${placed} placed` : ''}</div>
+        <div class="sellcol">${have ? `<button class="buy sell" data-selldev="${s.id}">sell ₪${fmt(Math.floor(s.cost / 2))}</button>
+          ${have > 1 ? `<button class="buy sell all" data-selldev="${s.id}" data-all="1">all ×${have}</button>` : ''}` : ''}</div>
         <button class="buy" data-sprinkler="${s.id}" ${state.money < s.cost ? 'disabled' : ''}>₪ ${fmt(s.cost)}</button>
       </div>`;
     }
-    html += `<div class="tierhead">Weapons — bugs raid the garden and chew on your crops, slowing them down</div>`;
+    html += `<div class="tierhead">Sprinklers and turrets sell back out of the shed at half price</div>
+      <div class="tierhead">Weapons — bugs raid the garden and chew on your crops, slowing them down</div>`;
     for (const w of WEAPONS) {
       const owned = !!state.weapons[w.id];
       const how = { melee: 'swing at anything close', spray: `sprays a ${w.splash}m cloud`,
@@ -377,6 +391,8 @@ export class UI {
             ${t.range > 100 ? 'covers the entire garden' : `range ${t.range}m`} · takes up the plot it stands on</div>
         </div>
         <div class="own">${have ? `in shed<br><b>${have}</b>` : ''}${placed ? `<br>${placed} placed` : ''}</div>
+        <div class="sellcol">${have ? `<button class="buy sell" data-selldev="${t.id}">sell ₪${fmt(Math.floor(t.cost / 2))}</button>
+          ${have > 1 ? `<button class="buy sell all" data-selldev="${t.id}" data-all="1">all ×${have}</button>` : ''}` : ''}</div>
         <button class="buy" data-turret="${t.id}" ${state.money < t.cost ? 'disabled' : ''}>₪ ${fmt(t.cost)}</button>
       </div>`;
     }
@@ -386,6 +402,9 @@ export class UI {
     }
     for (const b of this.el.body.querySelectorAll('[data-turret]')) {
       b.addEventListener('click', () => this.hooks.buyTurret(b.dataset.turret));
+    }
+    for (const b of this.el.body.querySelectorAll('[data-selldev]')) {
+      b.addEventListener('click', () => this.hooks.sellDevice(b.dataset.selldev, !!b.dataset.all));
     }
     for (const b of this.el.body.querySelectorAll('[data-can]')) {
       b.addEventListener('click', () => this.hooks.buyCan(b.dataset.can));

@@ -3,7 +3,7 @@
 import { PLOT_COUNT, PLANTS_BY_ID, plotCost, plotLayout, LAYOUT_ID,
          CANS, CANS_BY_ID, SPRINKLERS_BY_ID, TURRETS_BY_ID, WEAPONS_BY_ID,
          BUGS_BY_ID, BUG_SLOW, TROPHIES, goldenFor, goldenMultiplier,
-         GOLDEN_MIN_EARNED } from './data.js';
+         GOLDEN_MIN_EARNED, WEATHERS, mutationMultiplier, VARIANTS_BY_ID, MARKS } from './data.js';
 
 const SAVE_KEY = 'sheckle-garden-save-v1';
 export const SAVE_VERSION = 2;
@@ -28,6 +28,9 @@ function freshState() {
     prestiges: 0,       // how many times the garden has been replanted
     runEarned: 0,       // earnings since the last Golden Harvest
     trophies: {},       // claimed trophy ids
+    weather: 'clear',
+    weatherUntil: 0,
+    best: { mult: 1, name: '', plant: null },   // finest crop ever pulled
   };
 }
 
@@ -64,6 +67,9 @@ function sanitize(raw) {
   s.runEarned = Number.isFinite(raw.runEarned) ? Math.max(0, raw.runEarned) : (s.stats.earned || 0);
   s.trophies = {};
   for (const t of TROPHIES) if (raw.trophies?.[t.id]) s.trophies[t.id] = true;
+  s.weather = WEATHERS[raw.weather] ? raw.weather : 'clear';
+  s.weatherUntil = Number.isFinite(raw.weatherUntil) ? raw.weatherUntil : 0;
+  s.best = raw.best && Number.isFinite(raw.best.mult) ? raw.best : { mult: 1, name: '', plant: null };
 
   s.cans = {};
   for (const id of Object.keys(raw.cans || {})) if (CANS_BY_ID[id]) s.cans[id] = true;
@@ -94,6 +100,8 @@ function sanitize(raw) {
     const out = { plantId: p.plantId, plantedAt: Math.min(p.plantedAt, Date.now()), taken, watered: !!p.watered };
     // Bugs left chewing when you quit are still there when you come back.
     if (Array.isArray(p.bugs)) out.bugs = p.bugs.filter(id => BUGS_BY_ID[id]).slice(0, 12);
+    // Whatever the crop mutated into as it ripened.
+    if (p.mut && VARIANTS_BY_ID[p.mut.v]) out.mut = { v: p.mut.v, m: MARKS[p.mut.m] ? p.mut.m : null };
     if (Number.isFinite(p.x) && Number.isFinite(p.z)) { out.x = p.x; out.z = p.z; }
     return out;
   };
@@ -190,9 +198,14 @@ export function earn(amount) {
   state.runEarned += amount;
 }
 
-/** What a crop is worth right now, with Golden Seeds counted in. */
-export function cropValue(plant) {
-  return Math.floor(plant.sell * goldenMultiplier(state.golden));
+/** What a crop is worth right now: base × mutation × Golden Seeds. */
+export function cropValue(plant, mut = null) {
+  return Math.floor(plant.sell * mutationMultiplier(mut) * goldenMultiplier(state.golden));
+}
+
+/** Weather's contribution to how fast everything grows. */
+export function weatherSpeed() {
+  return WEATHERS[state.weather]?.growth ?? 1;
 }
 
 // ---- Golden Harvest ---------------------------------------------------
@@ -279,9 +292,9 @@ export function refreshSprinklers() {
 /** Bugs currently chewing on this plot. */
 export function bugsOn(index) { return state.plots[index]?.bugs?.length || 0; }
 
-/** Net growth multiplier: sprinklers speed a plot up, bugs drag it down. */
+/** Net growth multiplier: sprinklers and weather speed a plot up, bugs drag it down. */
 export function plotSpeed(index) {
-  return (speeds[index] ?? 1) / (1 + BUG_SLOW * bugsOn(index));
+  return (speeds[index] ?? 1) * weatherSpeed() / (1 + BUG_SLOW * bugsOn(index));
 }
 
 /** Sprinkler-only multiplier, for showing the two effects separately. */

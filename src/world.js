@@ -156,7 +156,7 @@ export function buildWorld(scene) {
 
   scatterScenery(scene, edge);
 
-  return { plots, stall, sun, ground, soilMat };
+  return { plots, stall, sun, hemi, ground, soilMat };
 }
 
 function buildStall() {

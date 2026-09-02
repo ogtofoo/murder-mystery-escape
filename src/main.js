@@ -3,14 +3,15 @@
 import * as THREE from 'three';
 import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollPack, plotCost, PLOT_COUNT, refundValue, SEED_REFUND,
          CANS_BY_ID, SPRINKLERS_BY_ID, TURRETS_BY_ID, WEAPONS_BY_ID, plotLayout,
-         raidLevel, BUG_SLOW, TROPHIES, goldenMultiplier } from './data.js';
+         raidLevel, BUG_SLOW, TROPHIES, goldenMultiplier, WEATHERS, rollWeather, rollMutation,
+         mutationMultiplier, mutationName, mutationColor } from './data.js';
 import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount,
          growth, isRipe, isRegrowing, harvestsLeft, cycleSeconds,
          refreshSprinklers, plotSpeed, sprinklerSpeed, sprinklerAt, stockCount, addSprinkler, takeSprinkler,
          bestCan, bugsOn, addBug, removeBug, turretAt, deviceAt,
-         cropValue, goldenPending, canGoldenHarvest, goldenHarvest, claimTrophies } from './state.js';
+         cropValue, goldenPending, canGoldenHarvest, goldenHarvest, claimTrophies, weatherSpeed } from './state.js';
 import { buildWorld } from './world.js';
-import { buildPlant, animatePlant } from './plants.js';
+import { buildPlant, animatePlant, applyMutation } from './plants.js';
 import { buildSprinkler, animateSprinkler, buildCan, waterBurst,
          buildTurret, animateTurret, buildWeapon, tracer } from './devices.js';
 import { Player } from './player.js';
@@ -18,6 +19,7 @@ import { UI } from './ui.js';
 import { sfx } from './sfx.js';
 import { GamepadInput, BTN } from './gamepad.js';
 import { BugSystem } from './bugs.js';
+import { Sky, dayPhase, isNight, clockLabel } from './sky.js';
 import { renderPadTest } from './padtest.js';
 import { BUILD_LABEL } from './build.js';
 
@@ -62,6 +64,7 @@ const ui = new UI({
   toggleWeapon: () => toggleWeapon(),
   buyWeapon: id => buyWeapon(id),
   buyTurret: id => buyTurret(id),
+  sellDevice: (id, all) => sellDevice(id, all),
   toggleCan: () => toggleCan(),
   buyCan: id => buyCan(id),
   buySprinkler: id => buySprinkler(id),
@@ -189,6 +192,20 @@ function removeTurret(index) {
   sfx.dig(); ui.refresh(); save();
 }
 
+/** Sell a sprinkler or turret out of the shed, at half what it cost. */
+function sellDevice(id, all = false) {
+  const spec = SPRINKLERS_BY_ID[id] || TURRETS_BY_ID[id];
+  if (!spec) return;
+  const have = stockCount(id);
+  if (have <= 0) { ui.toast('None of those in the shed.', 'bad'); sfx.deny(); return; }
+  const qty = all ? have : 1;
+  for (let i = 0; i < qty; i++) takeSprinkler(id);
+  const paid = Math.max(1, Math.floor(spec.cost * SEED_REFUND)) * qty;
+  earn(paid);
+  ui.toast(`Sold ${qty} ${spec.name}${qty === 1 ? '' : 's'} back for <b class="coin">₪${fmt(paid)}</b>`);
+  sfx.buy(); ui.refresh(); save();
+}
+
 function buyPack(packId) {
   const pack = PACKS.find(p => p.id === packId);
   if (!pack) return;
@@ -230,7 +247,7 @@ function plant(index) {
   if (!id || seedCount(id) <= 0) { ui.toast('No seed selected. Buy one in the shop (B).', 'bad'); sfx.deny(); return; }
   if (state.plots[index]) return;
   takeSeed(id);
-  state.plots[index] = { plantId: id, plantedAt: Date.now(), taken: 0, watered: false };
+  state.plots[index] = { plantId: id, plantedAt: Date.now(), taken: 0, watered: false, mut: undefined };
   syncPlot(index);
   const planted = PLANTS_BY_ID[id];
   ui.toast(`Planted ${planted.name}${planted.harvests > 1 ? ` — good for ${planted.harvests} harvests` : ''}`);
@@ -302,22 +319,27 @@ function harvest(index) {
   const plot = state.plots[index];
   if (!plot || !isRipe(plot, index)) return;
   const p = PLANTS_BY_ID[plot.plantId];
-  const paid = cropValue(p);
+  const mut = plot.mut;
+  const paid = cropValue(p, mut);
   earn(paid);
   state.stats.harvested++;
+  const mult = mutationMultiplier(mut);
+  if (mult > (state.best?.mult || 1)) state.best = { mult, name: mutationName(mut), plant: p.id };
 
   // Multi-harvest crops stay in the ground and start a (faster) regrow cycle.
   plot.taken = (plot.taken || 0) + 1;
   const left = p.harvests - plot.taken;
   if (left <= 0) state.plots[index] = null;
-  else { plot.plantedAt = Date.now(); plot.watered = false; }
+  else { plot.plantedAt = Date.now(); plot.watered = false; plot.mut = undefined; }
 
   burst(world.plots[index], TIERS[p.tier].color);
   syncPlot(index);
   const note = p.harvests === 1 ? ''
     : left > 0 ? ` <span style="opacity:.7">· regrows, ${left} left</span>`
     : ` <span style="opacity:.7">· plant is spent</span>`;
-  ui.toast(`Harvested ${p.name} &nbsp;<b class="coin">+₪${fmt(paid)}</b>${note}`, 'gold');
+  const label = mut ? `<b style="color:${'#' + mutationColor(mut).toString(16).padStart(6, '0')}">${mutationName(mut)}</b> ` : '';
+  const x = mult > 1 ? ` <b>×${fmt(mult)}</b>` : '';
+  ui.toast(`Harvested ${label}${p.name}${x} &nbsp;<b class="coin">+₪${fmt(paid)}</b>${note}`, 'gold');
   sfx.harvest(TIERS[p.tier].order);
   gamepad.rumble(0.25 + TIERS[p.tier].order * 0.08, 90 + TIERS[p.tier].order * 20);
   ui.refresh();
@@ -478,6 +500,26 @@ function updateEffects(dt) {
   }
 }
 
+// ---------------------------------------------------------------- sky & weather
+
+const sky = new Sky(scene, world.sun, world.hemi);
+
+function updateWeather() {
+  const now = Date.now();
+  if (now < state.weatherUntil) return;
+  const first = !state.weatherUntil;
+  const w = rollWeather(isNight());
+  state.weather = w.id;
+  const mins = w.mins[0] + Math.random() * (w.mins[1] - w.mins[0]);
+  state.weatherUntil = now + mins * 60000;
+  sky.setWeather(w.id);
+  if (!first && w.id !== 'clear') {
+    ui.toast(`${w.icon} <b>${w.name}</b> — ${w.growth > 1 ? `crops grow ${w.growth}× faster` : 'the sky turns'}`, 'gold');
+    sfx.weather();
+  }
+  save();
+}
+
 // ---------------------------------------------------------------- bugs
 
 const cellList = plotLayout();
@@ -515,7 +557,8 @@ function restoreBugs() {
 }
 
 function scheduleRaid(first = false) {
-  const wait = first ? 90 + Math.random() * 60 : RAID_MIN + Math.random() * (RAID_MAX - RAID_MIN);
+  let wait = first ? 90 + Math.random() * 60 : RAID_MIN + Math.random() * (RAID_MAX - RAID_MIN);
+  if (isNight()) wait *= 0.6;                     // bugs are bolder after dark
   state.nextRaid = Date.now() + wait * 1000;
 }
 
@@ -713,10 +756,13 @@ function updatePrompt() {
     const p = PLANTS_BY_ID[plot.plantId];
     const picks = harvestsLeft(plot);
     if (isRipe(plot, i)) {
+      const mut = plot.mut;
       const after = picks - 1;
       const more = p.harvests === 1 ? '' :
         after > 0 ? ` · regrows ${after} more time${after === 1 ? '' : 's'}` : ' · last picking';
-      ui.setPrompt(`<b>[E]</b> Harvest ${p.name} — <span class="coin">₪${fmt(cropValue(p))}</span>
+      const tag = mut ? `<b style="color:${'#' + mutationColor(mut).toString(16).padStart(6, '0')}">${mutationName(mut)}</b> ` : '';
+      const x = mut ? ` <b>×${fmt(mutationMultiplier(mut))}</b>` : '';
+      ui.setPrompt(`<b>[E]</b> Harvest ${tag}${p.name}${x} — <span class="coin">₪${fmt(cropValue(p, mut))}</span>
         <span class="sub" style="color:${TIERS[p.tier].css}">${TIERS[p.tier].name}${more}</span>`);
     } else {
       const wait = Math.ceil(cycleSeconds(plot, i) * (1 - growth(plot, i)));
@@ -724,10 +770,12 @@ function updatePrompt() {
       const tail = p.harvests === 1 ? '' : ` · ${picks} harvest${picks === 1 ? '' : 's'} left`;
       const spr = sprinklerSpeed(i);
       const infest = bugsOn(i);
+      const ws = weatherSpeed();
       const wet = spr > 1 ? ` · <span style="color:#8fd8ff">${spr}× sprinkler</span>` : '';
+      const sky = ws > 1 ? ` · <span style="color:#a8d8ff">${WEATHERS[state.weather].icon} ${ws}× weather</span>` : '';
       const chewed = infest ? ` · <span style="color:#ff7b6b">🐛 ${infest} bug${infest === 1 ? '' : 's'} slowing it</span>` : '';
       ui.setPrompt(`${p.name} — ${Math.floor(growth(plot, i) * 100)}% ${verb}
-        <span class="sub">ready in ${wait}s${tail}${wet}${chewed}</span>`);
+        <span class="sub">ready in ${wait}s${tail}${wet}${sky}${chewed}</span>`);
     }
     return;
   }
@@ -976,6 +1024,11 @@ function tick() {
   updateGamepad(dt);
   const using = active && (player.keys.has('KeyE') || mouseHeld || gamepad.held.has(BTN.A));
   updateDigging(using && !player.weapon);
+  updateWeather();
+  const phase = dayPhase();
+  sky.update(dt, phase, player.pos);
+  if (sky.takeStrike()) sfx.thunder();
+  ui.setSky(phase, state.weather);
   updateRaids();
   bugs.update(dt, t, camera);
   updateTurrets(dt);
@@ -1010,7 +1063,24 @@ function tick() {
     const data = state.plots[i];
     const g = growth(data, i);
     const done = g >= 1;
-    if (done) ripe++;
+    if (done) {
+      ripe++;
+      // A crop takes on its mutation the moment it finishes ripening.
+      if (data.mut === undefined) {
+        data.mut = rollMutation(state.weather);
+        if (data.mut) {
+          const name = mutationName(data.mut);
+          const mult = mutationMultiplier(data.mut);
+          if (mult >= 20) {
+            ui.toast(`✨ A <b>${name}</b> ${PLANTS_BY_ID[data.plantId].name} appeared! <b>×${fmt(mult)}</b>`, 'gold');
+            sfx.pack(6);
+            gamepad.rumble(0.5, 220);
+          }
+          save();
+        }
+      }
+    }
+    applyMutation(view.crop, done ? data.mut : null, mutationColor);
     // First cycle grows from a sprout; regrowth keeps the established plant and
     // just fills the fruit back in.
     const floor = data.taken > 0 ? 0.82 : 0.28;
@@ -1025,7 +1095,7 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { build: BUILD_LABEL, doGoldenHarvest, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
+window.game = { build: BUILD_LABEL, sky, doGoldenHarvest, updateWeather, sellDevice, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
                 placeSprinkler, buyWeapon, buyTurret, placeTurret, bugs, startRaid, fireWeapon,
                 waterPlot, refreshSprinklers, plotSpeed, state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
 

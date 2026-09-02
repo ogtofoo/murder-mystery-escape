@@ -37,6 +37,8 @@ export const sfx = {
     else if (kind === 'chain') { beep(1600, 0.09, 'square', 0.045); beep(2200, 0.09, 'square', 0.03, 0.04); }
     else beep(300, 0.08, 'square', 0.05);
   },
+  weather() { [400, 500, 620].forEach((n, i) => beep(n, 0.22, 'sine', 0.035, i * 0.12)); },
+  thunder() { beep(70, 0.5, 'sawtooth', 0.07); beep(48, 0.7, 'triangle', 0.06, 0.05); },
   dig() { beep(120, 0.18, 'sawtooth', 0.06); beep(90, 0.22, 'triangle', 0.05, 0.08); },
   harvest(tier = 0) {
     const base = 440 + tier * 40;

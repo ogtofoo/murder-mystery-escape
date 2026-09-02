@@ -131,6 +131,35 @@ Soil under a sprinkler reads darker, and the growth prompt shows the multiplier.
 
 The shovel picks a sprinkler back up and returns it to your shed, so moving one costs nothing.
 
+### 🌦️ Day, night and weather
+
+The sky runs a full day every 8 minutes: sunrise, noon, a long golden dusk, then night with
+stars and a moon that actually lights the garden. Bugs raid more often after dark.
+
+Weather rolls every few minutes and changes how the garden behaves:
+
+| Weather | Growth | What it brings |
+| --- | --- | --- |
+| ☀️ Clear | 1× | — |
+| 🌧️ Rain | 1.5× | Wet crops (2×) |
+| ⛈️ Thunderstorm | 1.5× | Wet, and rare **Shocked** crops (50×) — with lightning |
+| ❄️ Frost | 1.5× | Chilled (2×) and rare **Frozen** crops (10×) |
+| 🌈 Rainbow Sky | 1.35× | 14× the chance of a Silver, Gold or Rainbow crop |
+| ☄️ Meteor Shower | 1.25× | Night only — rare **Celestial** crops (120×) |
+
+### 🧬 Mutations — the thing worth bragging about
+
+A crop rolls its mutation the moment it finishes ripening, so you *see* what you got before you
+pick it. Gold plates the whole plant, Rainbow cycles through every colour, and the weather marks
+make it glow.
+
+**Variants** (one at a time): Silver **5×** · Gold **20×** · Rainbow **50×**
+**Weather marks** (one at a time): Wet **2×** · Chilled **2×** · Frozen **10×** · Shocked **50×** · Celestial **120×**
+
+They **multiply together**, and on top of your Golden Seed bonus. A Rainbow Shocked crop in a
+thunderstorm is **2,500×** its normal price; a Rainbow Celestial in a meteor shower is **6,000×**.
+A plain tomato sells for ₪180. A Rainbow Shocked one sells for ₪450,000.
+
 ### ✨ Golden Harvest — the endgame
 
 Once every plot is tilled and you've earned ₪100T in a run, the shop's **Golden** tab offers a

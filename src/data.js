@@ -8,45 +8,45 @@ export const TIERS = {
   mythic:       { id:'mythic',       name:'Mythic',       color:0xb455f6, css:'#b455f6', order:4, shine:0.55 },
   prismatic:    { id:'prismatic',    name:'Prismatic',    color:0xff4fd8, css:'#ff4fd8', order:5, shine:0.8, rainbow:true },
   transcendent: { id:'transcendent', name:'Transcendent', color:0x00e5ff, css:'#00e5ff', order:6, shine:1.0, rainbow:true },
-  super:        { id:'super',        name:'SUPER',        color:0xffffff, css:'#fff1a8', order:7, shine:1.4, rainbow:true },
+  super:        { id:'super',        name:'SUPER',        color:0xffd54f, css:'#fff1a8', order:7, shine:1.0, rainbow:true },
 };
 
 export const TIER_ORDER = Object.values(TIERS).sort((a,b)=>a.order-b.order).map(t=>t.id);
 
-// kind drives the 3D model: root | leaf | bush | vine | flower | pitaya | tree | orb
+// kind drives the 3D model — each crop gets a silhouette that matches its name
 export const PLANTS = [
   // ---- Common ----
   { id:'carrot',   name:'Carrot',        tier:'common', kind:'root',  cost:1,     grow:8,   sell:4,     colors:[0xff8f3f,0x66bb6a] },
-  { id:'radish',   name:'Radish',        tier:'common', kind:'root',  cost:4,     grow:12,  sell:12,    colors:[0xe8517a,0x7cb342] },
-  { id:'lettuce',  name:'Lettuce',       tier:'common', kind:'leaf',  cost:12,    grow:16,  sell:34,    colors:[0x8bc34a,0xaed581] },
+  { id:'radish',   name:'Radish',        tier:'common', kind:'bulb',  cost:4,     grow:12,  sell:12,    colors:[0xe8517a,0x7cb342] },
+  { id:'lettuce',  name:'Lettuce',       tier:'common', kind:'head',  cost:12,    grow:16,  sell:34,    colors:[0x8bc34a,0xaed581] },
   // ---- Uncommon ----
   { id:'tomato',   name:'Tomato',        tier:'uncommon', kind:'bush', cost:60,   grow:22,  sell:180,   colors:[0xe53935,0x4caf50] },
   { id:'blueberry',name:'Blueberry',     tier:'uncommon', kind:'bush', cost:220,  grow:28,  sell:680,   colors:[0x3f51b5,0x43a047] },
-  { id:'pepper',   name:'Fire Pepper',   tier:'uncommon', kind:'bush', cost:800,  grow:34,  sell:2500,  colors:[0xff5722,0x2e7d32] },
+  { id:'pepper',   name:'Fire Pepper',   tier:'uncommon', kind:'pepper', cost:800,  grow:34,  sell:2500,  colors:[0xff5722,0x2e7d32] },
   // ---- Rare ----
-  { id:'melon',    name:'Watermelon',    tier:'rare', kind:'vine',  cost:3200,   grow:45,  sell:11000,  colors:[0x2e7d32,0x66bb6a] },
-  { id:'pumpkin',  name:'Pumpkin',       tier:'rare', kind:'vine',  cost:12000,  grow:55,  sell:44000,  colors:[0xef6c00,0x558b2f] },
+  { id:'melon',    name:'Watermelon',    tier:'rare', kind:'melon',  cost:3200,   grow:45,  sell:11000,  colors:[0x2e7d32,0x66bb6a] },
+  { id:'pumpkin',  name:'Pumpkin',       tier:'rare', kind:'pumpkin',  cost:12000,  grow:55,  sell:44000,  colors:[0xef6c00,0x558b2f] },
   { id:'dragon',   name:'Dragonfruit',   tier:'rare', kind:'pitaya',cost:45000,  grow:70,  sell:175000, colors:[0xff2d78,0x4caf50] },
   // ---- Legendary ----
-  { id:'goldapple',name:'Golden Apple',  tier:'legendary', kind:'tree', cost:180000,   grow:90,  sell:760000,   colors:[0xffd54f,0x4e342e] },
-  { id:'starcorn', name:'Star Corn',     tier:'legendary', kind:'leaf', cost:700000,   grow:110, sell:4600000,  colors:[0xfff176,0x9ccc65] },
+  { id:'goldapple',name:'Golden Apple',  tier:'legendary', kind:'tree', cost:180000,   grow:90,  sell:760000,   colors:[0xffd54f,0x4caf50] },
+  { id:'starcorn', name:'Star Corn',     tier:'legendary', kind:'corn', cost:700000,   grow:110, sell:4600000,  colors:[0xfff176,0x9ccc65] },
   { id:'moonflower',name:'Moonflower',   tier:'legendary', kind:'flower',cost:2600000, grow:130, sell:12000000, colors:[0xe1f5fe,0x80cbc4] },
   // ---- Mythic ----
-  { id:'voidmelon',name:'Void Melon',    tier:'mythic', kind:'vine', cost:11000000,  grow:150, sell:52000000,  colors:[0x311b92,0x7c4dff] },
-  { id:'phoenix',  name:'Phoenix Pepper',tier:'mythic', kind:'bush', cost:45000000,  grow:175, sell:220000000, colors:[0xff6d00,0xffd600] },
-  { id:'lotus',    name:'Celestial Lotus',tier:'mythic',kind:'flower',cost:190000000, grow:200, sell:950000000, colors:[0xf8bbd0,0xb39ddb] },
+  { id:'voidmelon',name:'Void Melon',    tier:'mythic', kind:'melon', cost:11000000,  grow:150, sell:52000000,  colors:[0x311b92,0x7c4dff] },
+  { id:'phoenix',  name:'Phoenix Pepper',tier:'mythic', kind:'pepper', cost:45000000,  grow:175, sell:220000000, colors:[0xff6d00,0xffd600] },
+  { id:'lotus',    name:'Celestial Lotus',tier:'mythic',kind:'lotus',cost:190000000, grow:200, sell:950000000, colors:[0xf8bbd0,0xb39ddb] },
   // ---- Prismatic ----
-  { id:'prismrose',name:'Prism Rose',    tier:'prismatic', kind:'flower', cost:8e8,  grow:220, sell:4.2e9,  colors:[0xff4fd8,0x69f0ae] },
-  { id:'auroravine',name:'Aurora Vine',  tier:'prismatic', kind:'vine',   cost:3.4e9,grow:240, sell:1.8e10, colors:[0x00e676,0x18ffff] },
+  { id:'prismrose',name:'Prism Rose',    tier:'prismatic', kind:'rose', cost:8e8,  grow:220, sell:4.2e9,  colors:[0xff4fd8,0x69f0ae] },
+  { id:'auroravine',name:'Aurora Vine',  tier:'prismatic', kind:'grapes',   cost:3.4e9,grow:240, sell:1.8e10, colors:[0x00e676,0x18ffff] },
   { id:'spectralfig',name:'Spectral Fig',tier:'prismatic', kind:'tree',   cost:1.4e10,grow:260,sell:7.6e10, colors:[0xba68c8,0x4dd0e1] },
   // ---- Transcendent ----
-  { id:'eternityroot',name:'Eternity Root', tier:'transcendent', kind:'root', cost:6e10, grow:280, sell:4.8e11, colors:[0x00e5ff,0x1de9b6] },
-  { id:'novabloom', name:'Nova Bloom',   tier:'transcendent', kind:'flower', cost:2.6e11,grow:300, sell:1.4e12, colors:[0xffffff,0x40c4ff] },
-  { id:'chronofruit',name:'Chrono Fruit',tier:'transcendent', kind:'orb',    cost:1.1e12,grow:320, sell:6e12,   colors:[0x64ffda,0x536dfe] },
+  { id:'eternityroot',name:'Eternity Root', tier:'transcendent', kind:'glowroot', cost:6e10, grow:280, sell:4.8e11, colors:[0x00e5ff,0x1de9b6] },
+  { id:'novabloom', name:'Nova Bloom',   tier:'transcendent', kind:'star', cost:2.6e11,grow:300, sell:1.4e12, colors:[0xffffff,0x40c4ff] },
+  { id:'chronofruit',name:'Chrono Fruit',tier:'transcendent', kind:'clock',    cost:1.1e12,grow:320, sell:6e12,   colors:[0x64ffda,0x536dfe] },
   // ---- Super ----
-  { id:'sheckletree',name:'Sheckle Tree',tier:'super', kind:'tree', cost:5e12, grow:340, sell:2.8e13, colors:[0xffe082,0x8d6e63] },
-  { id:'infinitygourd',name:'Infinity Gourd',tier:'super', kind:'vine', cost:2.2e13,grow:380, sell:1.3e14, colors:[0xfff59d,0xff8a80] },
-  { id:'superfruit', name:'SUPERFRUIT',  tier:'super', kind:'orb',  cost:1e14, grow:420, sell:6.5e14, colors:[0xffffff,0xffd54f] },
+  { id:'sheckletree',name:'Sheckle Tree',tier:'super', kind:'cointree', cost:5e12, grow:340, sell:2.8e13, colors:[0xffe082,0x8d6e63] },
+  { id:'infinitygourd',name:'Infinity Gourd',tier:'super', kind:'gourd', cost:2.2e13,grow:380, sell:1.3e14, colors:[0xfff59d,0xff8a80] },
+  { id:'superfruit', name:'SUPERFRUIT',  tier:'super', kind:'star',  cost:1e14, grow:420, sell:6.5e14, harvests:8, colors:[0xffffff,0xffd54f] },
 ];
 
 /**
@@ -54,10 +54,17 @@ export const PLANTS = [
  * pull out of the ground whole (roots, leafy greens, corn) are one-and-done;
  * anything that fruits from a standing plant keeps producing.
  */
-const HARVESTS_BY_KIND = { root: 1, leaf: 1, bush: 4, vine: 3, flower: 5, pitaya: 5, tree: 6, orb: 8 };
+const HARVESTS_BY_KIND = {
+  root: 1, glowroot: 1, leaf: 1, head: 1, corn: 1,        // pulled up whole
+  bush: 4, pepper: 4, melon: 3, pumpkin: 3, gourd: 3, grapes: 3,
+  flower: 5, lotus: 5, rose: 5, pitaya: 5, star: 5,
+  tree: 6, cointree: 6, clock: 8,
+};
 
 // Regrowth is faster than the first grow — established plants pay off quicker.
-const REGROW_RATIO = { tree: 0.5, orb: 0.5, flower: 0.55, pitaya: 0.55, bush: 0.55, vine: 0.6 };
+const REGROW_RATIO = { tree: 0.5, cointree: 0.5, clock: 0.5, star: 0.5,
+                       flower: 0.55, lotus: 0.55, rose: 0.55, pitaya: 0.55,
+                       bush: 0.55, pepper: 0.55, grapes: 0.6, melon: 0.6, pumpkin: 0.6, gourd: 0.6 };
 
 for (const p of PLANTS) {
   p.harvests = p.harvests ?? HARVESTS_BY_KIND[p.kind] ?? 1;
@@ -163,6 +170,87 @@ export function rollBug(level) {
   return pool[pool.length - 1];
 }
 
+// ---- Weather -----------------------------------------------------------
+
+/**
+ * Weather rolls every few minutes. It changes how fast crops grow and which
+ * mutations they can pick up when they ripen.
+ */
+export const WEATHERS = {
+  clear:   { id:'clear',   name:'Clear',         icon:'☀️', growth:1.0,  weight:100, mins:[3, 7], mutations:[] },
+  rain:    { id:'rain',    name:'Rain',          icon:'🌧️', growth:1.5,  weight:38,  mins:[2, 4], mutations:[['wet', 0.55]] },
+  storm:   { id:'storm',   name:'Thunderstorm',  icon:'⛈️', growth:1.5,  weight:9,   mins:[2, 3], mutations:[['wet', 0.5], ['shocked', 0.07]] },
+  frost:   { id:'frost',   name:'Frost',         icon:'❄️', growth:1.5,  weight:12,  mins:[2, 4], mutations:[['chilled', 0.5], ['frozen', 0.09]] },
+  rainbow: { id:'rainbow', name:'Rainbow Sky',   icon:'🌈', growth:1.35, weight:4,   mins:[1, 2], mutations:[['wet', 0.3]], variantLuck: 14 },
+  meteor:  { id:'meteor',  name:'Meteor Shower', icon:'☄️', growth:1.25, weight:3,   mins:[1, 2], mutations:[['celestial', 0.14]], nightOnly: true },
+};
+
+/** Pick the next weather, given whether it is currently night. */
+export function rollWeather(night) {
+  const pool = Object.values(WEATHERS).filter(w => !w.nightOnly || night);
+  const total = pool.reduce((a, w) => a + w.weight, 0);
+  let r = Math.random() * total;
+  for (const w of pool) { r -= w.weight; if (r <= 0) return w; }
+  return WEATHERS.clear;
+}
+
+// ---- Mutations ---------------------------------------------------------
+
+/** Colour variants. A crop can only carry one, and rarer means richer. */
+export const VARIANTS = [
+  { id:'normal',  name:'',        mult:1,  weight:1000, color:0xffffff },
+  { id:'silver',  name:'Silver',  mult:5,  weight:52,   color:0xdfe7ee },
+  { id:'gold',    name:'Gold',    mult:20, weight:11,   color:0xffd54f },
+  { id:'rainbow', name:'Rainbow', mult:50, weight:2,    color:0xff4fd8 },
+];
+export const VARIANTS_BY_ID = Object.fromEntries(VARIANTS.map(v => [v.id, v]));
+
+/** Weather marks. Also one at a time, and they multiply on top of the variant. */
+export const MARKS = {
+  wet:       { id:'wet',       name:'Wet',       mult:2,   color:0x4fc3f7 },
+  chilled:   { id:'chilled',   name:'Chilled',   mult:2,   color:0x81d4fa },
+  frozen:    { id:'frozen',    name:'Frozen',    mult:10,  color:0xb3e5fc },
+  shocked:   { id:'shocked',   name:'Shocked',   mult:50,  color:0xffee58 },
+  celestial: { id:'celestial', name:'Celestial', mult:120, color:0xb388ff },
+};
+
+/** Roll what a crop becomes as it ripens under this weather. */
+export function rollMutation(weather) {
+  const w = WEATHERS[weather] || WEATHERS.clear;
+  const luck = w.variantLuck || 1;
+
+  const pool = VARIANTS.map(v => ({ v, weight: v.id === 'normal' ? v.weight : v.weight * luck }));
+  const total = pool.reduce((a, x) => a + x.weight, 0);
+  let r = Math.random() * total;
+  let variant = 'normal';
+  for (const x of pool) { r -= x.weight; if (r <= 0) { variant = x.v.id; break; } }
+
+  let mark = null;
+  for (const [id, chance] of w.mutations) {
+    if (Math.random() < chance) { mark = id; break; }   // best listed mark wins
+  }
+  return (variant === 'normal' && !mark) ? null : { v: variant, m: mark };
+}
+
+/** How much a mutation multiplies a crop's value. */
+export function mutationMultiplier(mut) {
+  if (!mut) return 1;
+  return (VARIANTS_BY_ID[mut.v]?.mult || 1) * (MARKS[mut.m]?.mult || 1);
+}
+
+/** "Rainbow Shocked" — for toasts and prompts. */
+export function mutationName(mut) {
+  if (!mut) return '';
+  return [VARIANTS_BY_ID[mut.v]?.name, MARKS[mut.m]?.name].filter(Boolean).join(' ');
+}
+
+/** The colour a mutated crop should glow. */
+export function mutationColor(mut) {
+  if (!mut) return null;
+  if (mut.v !== 'normal') return VARIANTS_BY_ID[mut.v].color;
+  return MARKS[mut.m]?.color ?? null;
+}
+
 // ---- Golden Harvest (prestige) ----------------------------------------
 
 /** Each Golden Seed adds this much to every crop's sale value, forever. */
@@ -215,6 +303,10 @@ export const TROPHIES = [
   { id:'boss10',    name:'Monster Hunter',   hint:'Beat 10 MEGA bugs',              goal:10,    at:s => s.stats.bossesKilled, reward:5e11 },
   { id:'spr5',      name:'Sprinkler City',   hint:'Have 5 sprinklers running',      goal:5,     at:s => s.sprinklers.filter(Boolean).length, reward:3e6 },
   { id:'tur3',      name:'Fort Garden',      hint:'Have 3 turrets running',         goal:3,     at:s => s.turrets.filter(Boolean).length, reward:5e9 },
+  { id:'shiny',     name:'Ooh, Shiny',       hint:'Harvest a crop worth 5× or more', goal:5,     at:s => s.best?.mult || 1, reward:20000 },
+  { id:'goldcrop',  name:'Midas Crop',       hint:'Harvest a Gold crop (20×)',       goal:20,    at:s => s.best?.mult || 1, reward:3e6 },
+  { id:'rainbowcrop',name:'Over the Rainbow',hint:'Harvest a Rainbow crop (50×)',    goal:50,    at:s => s.best?.mult || 1, reward:5e8 },
+  { id:'legendcrop',name:'One in a Million',  hint:'Harvest a crop worth 1,000×',    goal:1000,  at:s => s.best?.mult || 1, reward:0, golden:25 },
   { id:'golden1',   name:'Golden Touch',     hint:'Do one Golden Harvest',          goal:1,     at:s => s.prestiges, reward:0, golden:5 },
   { id:'golden10',  name:'Living Legend',    hint:'Do 10 Golden Harvests',          goal:10,    at:s => s.prestiges, reward:0, golden:100 },
 ];
