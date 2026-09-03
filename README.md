@@ -174,6 +174,39 @@ a level-25 drake calls one every 1.6 seconds. **There is no cap** — every extr
 level adds to the rate, so five grown drakes bring over three bugs a second and a pack of twelve
 brings seven. Without a carnivore planted they just eat your crops, so pair them up.
 
+### 🦝 Night thieves and garden defence
+
+After dark, someone always fancies your crops. **Raccoons, Crows and Garden Gnomes** creep in
+and dig up whatever is sitting **ripe** — a stolen crop pays you nothing. Gnomes go straight for
+your most valuable plant, crows fly in over everything, and they all get tougher as your garden
+grows. They only turn up while you're actually playing, so nothing is stolen while the game is
+closed.
+
+Catch one — with a weapon, a turret, a trap or a guard crop — and it pays a bounty.
+
+| Defence | Cost | Does |
+| --- | --- | --- |
+| Scarecrow | ₪2M | Thieves won't come within 7m of it |
+| Bear Trap | ₪25M | 2,500 damage a second to anything creeping past |
+| Flood Lamp | ₪400M | Lights 9m of garden, halving their speed — and glows at night |
+
+**Guard crops** defend their own patch and can never be stolen:
+
+| Crop | Cost | Does |
+| --- | --- | --- |
+| Guard Cactus | ₪43K | 900 damage a second to thieves within 4m |
+| Iron Bamboo | ₪1.9M | Blocks thieves within 5m outright |
+
+The simplest defence is still to harvest promptly — a garden with nothing ripe in it has
+nothing worth stealing.
+
+### 🏡 Decorations
+
+A **Garden** tab of things to place wherever you like on the grass: fence panels, stone paths,
+lanterns, topiary, a bird bath, a lawn gnome, a golden statue and a rose arch. Pick one, aim at
+the ground and press `E`; the shovel picks them back up. **Lanterns and flood lamps light up
+after dark**, so a well-decorated garden actually looks like something at night.
+
 ### 🌦️ Day, night and weather
 
 The sky runs a full day every 8 minutes: sunrise, noon, a long golden dusk, then night with

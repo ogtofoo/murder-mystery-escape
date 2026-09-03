@@ -48,6 +48,9 @@ export const PLANTS = [
   { id:'sheckletree',name:'Sheckle Tree',tier:'super', kind:'cointree', cost:5e12, grow:340, sell:2.8e13, colors:[0xffe082,0x8d6e63] },
   { id:'infinitygourd',name:'Infinity Gourd',tier:'super', kind:'gourd', cost:2.2e13,grow:380, sell:1.3e14, colors:[0xfff59d,0xff8a80] },
   { id:'superfruit', name:'SUPERFRUIT',  tier:'super', kind:'star',  cost:1e14, grow:420, sell:6.5e14, harvests:8, colors:[0xffffff,0xffd54f] },
+  // ---- Guard crops: grown for protection, not for profit ----
+  { id:'cactus', name:'Guard Cactus', tier:'rare',      kind:'cactus', cost:9000,   grow:60, sell:2500,  harvests:8, guard:{ damage:900, radius:4 },  colors:[0x66bb6a,0xd7ccc8] },
+  { id:'bamboo', name:'Iron Bamboo',  tier:'legendary', kind:'bamboo', cost:400000, grow:80, sell:90000, harvests:8, guard:{ block:true, radius:5 }, colors:[0x9ccc65,0x827717] },
   // ---- Carnivore: these do not ripen on time alone. They have to eat. ----
   { id:'snaptrap',  name:'Venus Snaptrap', tier:'carnivore', kind:'trap',    cost:8e14, grow:520, sell:9e15,  harvests:5, eats:10, reach:3.2, hp:6e3,  bite:500,    colors:[0xff1744,0x2e7d32] },
   { id:'pitcher',   name:'Pitcher Beast',  tier:'carnivore', kind:'pitcher', cost:6e15, grow:640, sell:7e16,  harvests:5, eats:18, reach:3.8, hp:6e4,  bite:4000,   colors:[0xab47bc,0x4caf50] },
@@ -68,13 +71,14 @@ const HARVESTS_BY_KIND = {
   flower: 5, lotus: 5, rose: 5, pitaya: 5, star: 5,
   tree: 6, cointree: 6, clock: 8,
   trap: 5, pitcher: 5, maw: 4,
+  cactus: 8, bamboo: 8,
 };
 
 // Regrowth is faster than the first grow — established plants pay off quicker.
 const REGROW_RATIO = { tree: 0.5, cointree: 0.5, clock: 0.5, star: 0.5,
                        flower: 0.55, lotus: 0.55, rose: 0.55, pitaya: 0.55,
                        bush: 0.55, pepper: 0.55, grapes: 0.6, melon: 0.6, pumpkin: 0.6, gourd: 0.6,
-                       trap: 0.6, pitcher: 0.6, maw: 0.6 };
+                       trap: 0.6, pitcher: 0.6, maw: 0.6, cactus: 0.5, bamboo: 0.5 };
 
 for (const p of PLANTS) {
   p.carnivore = CARNIVORE_KINDS.has(p.kind);
@@ -192,6 +196,53 @@ export function rollBug(level) {
   for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) return pool[i]; }
   return pool[pool.length - 1];
 }
+
+// ---- Night thieves -----------------------------------------------------
+
+/**
+ * After dark, thieves creep in and try to make off with whatever is sitting
+ * ripe. They only turn up while you are actually playing — nobody robs your
+ * garden while the game is closed.
+ */
+export const THIEVES = [
+  { id:'raccoon', name:'Raccoon',      hp:420,  speed:2.3, size:0.85, color:0x8d9499, loot:1, weight:60 },
+  { id:'crow',    name:'Crow',         hp:260,  speed:3.6, size:0.7,  color:0x2b2b33, loot:1, weight:28, flies:true },
+  { id:'gnome',   name:'Garden Gnome', hp:2200, speed:1.5, size:1.0,  color:0xd84315, loot:2, weight:12, greedy:true },
+];
+export const THIEVES_BY_ID = Object.fromEntries(THIEVES.map(t => [t.id, t]));
+
+/** Thieves toughen up as the garden grows, so they stay a threat. */
+export function thiefScale(ownedPlots, prestiges) {
+  return 1 + ownedPlots * 0.25 + (prestiges || 0) * 2;
+}
+
+export function rollThief() {
+  const total = THIEVES.reduce((a, t) => a + t.weight, 0);
+  let r = Math.random() * total;
+  for (const t of THIEVES) { r -= t.weight; if (r <= 0) return t; }
+  return THIEVES[0];
+}
+
+/** Things you can stand in the garden to keep thieves out. */
+export const DEFENCES = [
+  { id:'def_scarecrow', name:'Scarecrow',  cost:2e6,  radius:7,  scare:true,  desc:'thieves will not come within its shadow' },
+  { id:'def_trap',      name:'Bear Trap',  cost:2.5e7, radius:3.5, damage:2500, desc:'snaps shut on anything that creeps past' },
+  { id:'def_lamp',      name:'Flood Lamp', cost:4e8,  radius:9,  slow:0.45,   desc:'lights the garden so thieves crawl' },
+];
+export const DEFENCES_BY_ID = Object.fromEntries(DEFENCES.map(d => [d.id, d]));
+
+/** Decorations. Purely for show, except the lantern, which lights up at night. */
+export const PROPS = [
+  { id:'prop_fence',   name:'Fence Panel',   cost:5000,   shape:'fence' },
+  { id:'prop_path',    name:'Stone Path',    cost:12000,  shape:'path' },
+  { id:'prop_lantern', name:'Garden Lantern',cost:250000, shape:'lantern', light:true },
+  { id:'prop_bush',    name:'Topiary Bush',  cost:900000, shape:'topiary' },
+  { id:'prop_bird',    name:'Bird Bath',     cost:6e6,    shape:'birdbath' },
+  { id:'prop_gnome',   name:'Lawn Gnome',    cost:4e7,    shape:'gnome' },
+  { id:'prop_statue',  name:'Golden Statue', cost:8e9,    shape:'statue' },
+  { id:'prop_arch',    name:'Rose Arch',     cost:2e11,   shape:'arch' },
+];
+export const PROPS_BY_ID = Object.fromEntries(PROPS.map(p => [p.id, p]));
 
 // ---- Carnivore feeding -------------------------------------------------
 
@@ -482,6 +533,9 @@ export const TROPHIES = [
   { id:'goldcrop',  name:'Midas Crop',       hint:'Harvest a Gold crop (20×)',       goal:20,    at:s => s.best?.mult || 1, reward:3e6 },
   { id:'rainbowcrop',name:'Over the Rainbow',hint:'Harvest a Rainbow crop (50×)',    goal:50,    at:s => s.best?.mult || 1, reward:5e8 },
   { id:'legendcrop',name:'One in a Million',  hint:'Harvest a crop worth 1,000×',    goal:1000,  at:s => s.best?.mult || 1, reward:0, golden:25 },
+  { id:'watch',     name:'Neighbourhood Watch', hint:'Catch 10 thieves',            goal:10,    at:s => s.stats.thievesCaught || 0, reward:2e7 },
+  { id:'fortress',  name:'Fort Knox',        hint:'Catch 100 thieves',               goal:100,   at:s => s.stats.thievesCaught || 0, reward:0, golden:20 },
+  { id:'decorator', name:'Interior Designer',hint:'Place 10 decorations',            goal:10,    at:s => s.props?.length || 0, reward:5e6 },
   { id:'firstbite', name:'First Bite',       hint:'Let a carnivore eat 1 bug',        goal:1,     at:s => s.stats.eaten || 0, reward:5e6 },
   { id:'buffet',    name:'Bug Buffet',       hint:'Feed carnivores 100 bugs',        goal:100,   at:s => s.stats.eaten || 0, reward:0, golden:15 },
   { id:'pets3',     name:'Best Friends',     hint:'Hatch 3 pets',                    goal:3,     at:s => s.pets?.length || 0, reward:1e6 },

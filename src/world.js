@@ -145,7 +145,7 @@ export function buildWorld(scene) {
 
     scene.add(group);
     return { index: i, group, soil, rim, locked, label, hit, highlight, cropAnchor,
-             crop: null, sprinkler: null, turret: null, x: cell.x, z: cell.z };
+             crop: null, sprinkler: null, turret: null, defence: null, x: cell.x, z: cell.z };
   });
 
   const stall = buildStall();

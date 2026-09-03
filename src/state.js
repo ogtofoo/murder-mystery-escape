@@ -6,7 +6,8 @@ import { PLOT_COUNT, PLANTS_BY_ID, plotCost, plotLayout, LAYOUT_ID,
          GOLDEN_MIN_EARNED, WEATHERS, mutationMultiplier, VARIANTS_BY_ID, MARKS,
          PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS_BY_ID,
          TREAT_VALUE, HAPPY_MAX, HAPPY_DECAY_PER_MIN, happyBonus,
-         UPGRADES, UPGRADES_BY_ID, upgradeCost, rankFor, dietBonus, dietSummary } from './data.js';
+         UPGRADES, UPGRADES_BY_ID, upgradeCost, rankFor, dietBonus, dietSummary,
+         DEFENCES_BY_ID, PROPS_BY_ID } from './data.js';
 
 const SAVE_KEY = 'sheckle-garden-save-v1';
 export const SAVE_VERSION = 2;
@@ -31,6 +32,8 @@ function freshState() {
     prestiges: 0,       // how many times the garden has been replanted
     runEarned: 0,       // earnings since the last Golden Harvest
     trophies: {},       // claimed trophy ids
+    defences: new Array(PLOT_COUNT).fill(null),  // scarecrows, traps and lamps on plots
+    props: [],                                   // decorations dotted around the garden
     weather: 'clear',
     weatherUntil: 0,
     best: { mult: 1, name: '', plant: null },   // finest crop ever pulled
@@ -110,6 +113,15 @@ function sanitize(raw) {
   s.turrets = new Array(PLOT_COUNT).fill(null)
     .map((_, i) => (TURRETS_BY_ID[rawTur[i]] ? rawTur[i] : null));
   s.nextRaid = Number.isFinite(raw.nextRaid) ? raw.nextRaid : 0;
+
+  const rawDef = Array.isArray(raw.defences) ? raw.defences : [];
+  s.defences = new Array(PLOT_COUNT).fill(null)
+    .map((_, i) => (DEFENCES_BY_ID[rawDef[i]] ? rawDef[i] : null));
+
+  s.props = Array.isArray(raw.props)
+    ? raw.props.filter(p => PROPS_BY_ID[p?.id] && Number.isFinite(p.x) && Number.isFinite(p.z))
+        .slice(0, 200).map(p => ({ id: p.id, x: p.x, z: p.z, r: Number.isFinite(p.r) ? p.r : 0 }))
+    : [];
 
   const rawSpr = Array.isArray(raw.sprinklers) ? raw.sprinklers : [];
   s.sprinklers = new Array(PLOT_COUNT).fill(null)
@@ -409,9 +421,45 @@ export function removeBug(index, specId) {
 
 export function turretAt(index) { return TURRETS_BY_ID[state.turrets[index]] || null; }
 
+export function defenceAt(index) { return DEFENCES_BY_ID[state.defences[index]] || null; }
+
 /** Any device standing on this plot blocks planting. */
 export function deviceAt(index) {
-  return SPRINKLERS_BY_ID[state.sprinklers[index]] || TURRETS_BY_ID[state.turrets[index]] || null;
+  return SPRINKLERS_BY_ID[state.sprinklers[index]]
+    || TURRETS_BY_ID[state.turrets[index]]
+    || DEFENCES_BY_ID[state.defences[index]] || null;
+}
+
+/**
+ * The strongest defence of a kind covering a point, plus any guard crops.
+ * `kind` is 'scare', 'slow' or 'damage'.
+ */
+export function defenceCover(x, z, kind) {
+  const cells = plotLayout();
+  let best = 0;
+  for (let i = 0; i < PLOT_COUNT; i++) {
+    const d = DEFENCES_BY_ID[state.defences[i]];
+    if (d && d[kind]) {
+      if (Math.hypot(cells[i].x - x, cells[i].z - z) <= d.radius) {
+        best = Math.max(best, d[kind] === true ? 1 : d[kind]);
+      }
+    }
+    // Guard crops defend their patch too.
+    const plant = PLANTS_BY_ID[state.plots[i]?.plantId];
+    const guard = plant?.guard;
+    if (guard && Math.hypot(cells[i].x - x, cells[i].z - z) <= guard.radius) {
+      if (kind === 'damage' && guard.damage) best = Math.max(best, guard.damage);
+      if (kind === 'scare' && guard.block) best = Math.max(best, 1);
+    }
+  }
+  return best;
+}
+
+/** Crops a thief will not touch: guard crops are rooted too well. */
+export function stealable(index) {
+  const plot = state.plots[index];
+  const plant = PLANTS_BY_ID[plot?.plantId];
+  return !!plant && !plant.guard && !plant.carnivore;
 }
 
 /** The sprinkler standing on this plot, if any. */

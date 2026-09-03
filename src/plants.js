@@ -322,6 +322,48 @@ const SHAPES = {
     }
   },
 
+  // ---- guard crops -----------------------------------------------------
+  cactus(g, plant, { body, foliage }) {
+    const trunk = mesh(RIB(), body, [0, 0.55, 0], [0.34, 1.1, 0.34]);
+    g.add(trunk);
+    for (const side of [-1, 1]) {                                        // arms
+      const arm = mesh(RIB(), body, [side * 0.3, 0.62, 0], [0.2, 0.5, 0.2]);
+      arm.rotation.z = -side * 0.9;
+      g.add(arm);
+      g.add(mesh(RIB(), body, [side * 0.42, 0.86, 0], [0.18, 0.34, 0.18]));
+    }
+    for (let i = 0; i < 22; i++) {                                       // spines
+      const th = 0.4 + Math.random() * 2.2, ph = i * 2.399;
+      const r = 0.19;
+      const spine = mesh(CONE(), foliage,
+        [Math.cos(ph) * r, 0.25 + (i / 22) * 0.9, Math.sin(ph) * r], [0.05, 0.16, 0.05]);
+      spine.rotation.set(Math.cos(ph) * 1.4, 0, -Math.sin(ph) * 1.4);
+      void th;
+      g.add(spine);
+    }
+    g.add(fruit(mesh(SPHERE(), mat(0xff4081, plant.tier), [0, 1.16, 0], 0.26)));   // little bloom
+  },
+
+  bamboo(g, plant, { body, foliage }) {
+    for (let stalk = 0; stalk < 4; stalk++) {
+      const a = (stalk / 4) * Math.PI * 2 + 0.4;
+      const x = Math.cos(a) * 0.26, z = Math.sin(a) * 0.26;
+      const h = 1.5 + (stalk % 2) * 0.5;
+      for (let seg = 0; seg < 5; seg++) {                                // segmented canes
+        const y = 0.16 + seg * (h / 5);
+        if (y > h) break;
+        g.add(mesh(CYL(), seg % 2 ? foliage : body, [x, y, z], [0.11, h / 5 * 0.9, 0.11]));
+      }
+      for (let l = 0; l < 3; l++) {
+        const la = a + l * 2;
+        const leaf = mesh(LEAF(), body, [x + Math.cos(la) * 0.16, h * 0.62 + l * 0.22, z + Math.sin(la) * 0.16], [1.2, 0.5, 0.3]);
+        leaf.rotation.set(Math.PI / 2 - 0.6, -la, 0);
+        g.add(leaf);
+      }
+    }
+    g.add(fruit(mesh(SPHERE(), mat(0xdce775, plant.tier), [0, 0.5, 0], 0.2)));
+  },
+
   // ---- carnivores ------------------------------------------------------
   trap(g, plant, { body, foliage, cA }) {
     g.add(mesh(CYL(), foliage, [0, 0.3, 0], [0.1, 0.6, 0.1]));

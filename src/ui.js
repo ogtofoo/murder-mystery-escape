@@ -5,6 +5,7 @@ import { PLANTS, PLANTS_BY_ID, PACKS, TIERS, TIER_ORDER, PLOT_COUNT, fmt, refund
          WEAPONS, TURRETS, TURRETS_BY_ID, TROPHIES, GOLDEN_BONUS, GOLDEN_MIN_EARNED,
          goldenMultiplier, WEATHERS, VARIANTS, MARKS, mutationMultiplier,
          PETS, PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS, ABILITY_TEXT,
+         DEFENCES, DEFENCES_BY_ID, PROPS, PROPS_BY_ID, THIEVES,
          moodOf, happyBonus, TREAT_VALUE,
          UPGRADES, upgradeCost, rankFor, nextRank } from './data.js';
 import { state, seedCount, stockCount, goldenPending, canGoldenHarvest, trophyProgress, cropValue,
@@ -91,7 +92,8 @@ export class UI {
         const pa = PLANTS_BY_ID[a], pb = PLANTS_BY_ID[b];
         return TIERS[pa.tier].order - TIERS[pb.tier].order || pa.cost - pb.cost;
       });
-    const devices = [...SPRINKLERS, ...TURRETS].filter(d => stockCount(d.id) > 0).map(d => d.id);
+    const devices = [...SPRINKLERS, ...TURRETS, ...DEFENCES, ...PROPS]
+      .filter(d => stockCount(d.id) > 0).map(d => d.id);
     return [...seeds, ...devices].slice(0, 9);
   }
 
@@ -103,6 +105,10 @@ export class UI {
     if (s) return { name: s.name.replace(' Sprinkler', ''), tier: s.tier, count: stockCount(id), sprinkler: true, glyph: '✳' };
     const t = TURRETS_BY_ID[id];
     if (t) return { name: t.name.replace(' Turret', ''), tier: t.tier, count: stockCount(id), sprinkler: true, glyph: '⌖' };
+    const d = DEFENCES_BY_ID[id];
+    if (d) return { name: d.name, tier: 'rare', count: stockCount(id), sprinkler: true, glyph: '🛡' };
+    const pr = PROPS_BY_ID[id];
+    if (pr) return { name: pr.name, tier: 'common', count: stockCount(id), sprinkler: true, glyph: '🏡' };
     return null;
   }
 
@@ -166,14 +172,17 @@ export class UI {
     this.el.packmodal.classList.remove('hidden');
   }
 
-  setBugCount(n) {
-    if (n === this.bugCount) return;
-    this.bugCount = n;
+  setBugCount(n, thieves = 0) {
+    const key = n + ':' + thieves;
+    if (key === this.bugCount) return;
+    this.bugCount = key;
     const el = document.querySelector('#bugcount');
-    if (el) {
-      el.classList.toggle('hidden', n === 0);
-      el.innerHTML = `🐛 <b>${n}</b> bug${n === 1 ? '' : 's'} in the garden`;
-    }
+    if (!el) return;
+    el.classList.toggle('hidden', n === 0 && thieves === 0);
+    const parts = [];
+    if (n) parts.push(`🐛 <b>${n}</b> bug${n === 1 ? '' : 's'}`);
+    if (thieves) parts.push(`🦝 <b>${thieves}</b> ${thieves === 1 ? 'thief' : 'thieves'} in your garden!`);
+    el.innerHTML = parts.join(' · ');
   }
 
   toolSlot() {
@@ -252,6 +261,7 @@ export class UI {
     if (this.tab === 'seeds') this.renderSeeds();
     else if (this.tab === 'packs') this.renderPacks();
     else if (this.tab === 'tools') this.renderTools();
+    else if (this.tab === 'props') this.renderGarden();
     else if (this.tab === 'pets') this.renderPets();
     else if (this.tab === 'mastery') this.renderMastery();
     else if (this.tab === 'trophies') this.renderTrophies();
@@ -445,6 +455,54 @@ export class UI {
     }
     for (const b of this.el.body.querySelectorAll('[data-sprinkler]')) {
       b.addEventListener('click', () => this.hooks.buySprinkler(b.dataset.sprinkler));
+    }
+  }
+
+  renderGarden() {
+    let html = `<div class="tierhead">Defences — thieves come after dark and take whatever is sitting ripe.
+      Stand these on empty plots.</div>`;
+    for (const d of DEFENCES) {
+      const have = stockCount(d.id);
+      const placed = state.defences.filter(x => x === d.id).length;
+      html += `<div class="row">
+        <div class="stripe" style="background:#7cb342"></div>
+        <div>
+          <div class="name">${d.name}</div>
+          <div class="meta">${d.desc} · reaches ${d.radius}m${d.damage ? ` · ${fmt(d.damage)} damage a second` : ''}</div>
+        </div>
+        <div class="own">${have ? `in shed<br><b>${have}</b>` : ''}${placed ? `<br>${placed} out` : ''}</div>
+        <button class="buy" data-defence="${d.id}" ${state.money < d.cost ? 'disabled' : ''}>₪ ${fmt(d.cost)}</button>
+      </div>`;
+    }
+    html += `<div class="tierhead">Who comes calling</div>`;
+    for (const t of THIEVES) {
+      html += `<div class="row"><div class="stripe" style="background:#${t.color.toString(16).padStart(6, '0')}"></div>
+        <div><div class="name">${t.name}</div>
+        <div class="meta">${t.flies ? 'flies in over the fence' : t.greedy ? 'goes straight for your most valuable crop' : 'grabs whatever is closest'}
+          · takes ${t.loot} crop${t.loot === 1 ? '' : 's'}${t.greedy ? ' at a time' : ''}</div></div>
+        <div class="own"></div><div></div></div>`;
+    }
+    html += `<div class="tierhead">Decorations — pick one, aim at the grass and press <b>E</b>.
+      Shovel + <b>E</b> picks one back up.</div>`;
+    for (const p of PROPS) {
+      const have = stockCount(p.id);
+      const out = state.props.filter(x => x.id === p.id).length;
+      html += `<div class="row">
+        <div class="stripe" style="background:var(--gold)"></div>
+        <div>
+          <div class="name">${p.name}</div>
+          <div class="meta">${p.light ? 'lights up after dark' : 'decoration'}</div>
+        </div>
+        <div class="own">${have ? `in shed<br><b>${have}</b>` : ''}${out ? `<br>${out} placed` : ''}</div>
+        <button class="buy" data-prop="${p.id}" ${state.money < p.cost ? 'disabled' : ''}>₪ ${fmt(p.cost)}</button>
+      </div>`;
+    }
+    this.el.body.innerHTML = html;
+    for (const b of this.el.body.querySelectorAll('[data-defence]')) {
+      b.addEventListener('click', () => this.hooks.buyDefence(b.dataset.defence));
+    }
+    for (const b of this.el.body.querySelectorAll('[data-prop]')) {
+      b.addEventListener('click', () => this.hooks.buyProp(b.dataset.prop));
     }
   }
 

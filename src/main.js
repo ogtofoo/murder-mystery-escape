@@ -6,14 +6,16 @@ import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollPack, plotCost, PLOT_COUNT, refund
          raidLevel, BUG_SLOW, TROPHIES, goldenMultiplier, WEATHERS, rollWeather, rollMutation,
          mutationMultiplier, mutationName, mutationColor,
          PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS_BY_ID, rollPet, moodOf, TREAT_VALUE, lureRate,
-         UPGRADES_BY_ID, upgradeCost, dietSummary, dietBonus, bugBite, PLANT_REGEN_PER_SEC } from './data.js';
+         UPGRADES_BY_ID, upgradeCost, dietSummary, dietBonus, bugBite, PLANT_REGEN_PER_SEC,
+         DEFENCES_BY_ID, PROPS_BY_ID } from './data.js';
 import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount,
          growth, isRipe, isRegrowing, harvestsLeft, cycleSeconds,
          refreshSprinklers, plotSpeed, sprinklerSpeed, sprinklerAt, stockCount, addSprinkler, takeSprinkler,
          bestCan, bugsOn, addBug, removeBug, turretAt, deviceAt,
          cropValue, goldenPending, canGoldenHarvest, goldenHarvest, claimTrophies, weatherSpeed,
          equippedPets, petPower, petHarvestRange, luckMultiplier, upgradeLevel, nextUpgradeCost, rank,
-         feedPet, decayHappiness, feedProgress, feedCarnivore } from './state.js';
+         feedPet, decayHappiness, feedProgress, feedCarnivore,
+         defenceAt, defenceCover, stealable } from './state.js';
 import { buildWorld } from './world.js';
 import { buildPlant, animatePlant, applyMutation, setCarnivoreFruit } from './plants.js';
 import { buildSprinkler, animateSprinkler, buildCan, waterBurst,
@@ -25,6 +27,8 @@ import { GamepadInput, BTN } from './gamepad.js';
 import { BugSystem } from './bugs.js';
 import { Sky, dayPhase, isNight, clockLabel } from './sky.js';
 import { PetPack } from './pets.js';
+import { ThiefPack } from './thieves.js';
+import { buildProp, litProp } from './props.js';
 import { renderPadTest } from './padtest.js';
 import { BUILD_LABEL } from './build.js';
 
@@ -61,6 +65,8 @@ const ui = new UI({
     refreshSprinklers();
     restoreBugs();
     syncPets();
+    syncProps();
+    thieves.clear();
     syncAllPlots(true);
     ui.refresh();
     ui.toast('Backup restored — welcome back.', 'gold');
@@ -92,6 +98,8 @@ const ui = new UI({
   toggleWeapon: () => toggleWeapon(),
   buyWeapon: id => buyWeapon(id),
   buyTurret: id => buyTurret(id),
+  buyDefence: id => buyDefence(id),
+  buyProp: id => buyProp(id),
   sellDevice: (id, all) => sellDevice(id, all),
   toggleCan: () => toggleCan(),
   buyCan: id => buyCan(id),
@@ -244,6 +252,97 @@ function buyUpgrade(id) {
   sfx.buy(); ui.refresh(); save();
 }
 
+function buyDefence(id) {
+  const d = DEFENCES_BY_ID[id];
+  if (!d) return;
+  if (!spend(d.cost)) { ui.toast('Not enough sheckles.', 'bad'); sfx.deny(); return; }
+  addSprinkler(id, 1);
+  ui.select(id);
+  ui.toast(`Bought a ${d.name} — stand it on an empty plot`, 'gold');
+  sfx.buy(); ui.refresh(); save();
+}
+
+function placeDefence(index) {
+  const id = ui.selected;
+  const d = DEFENCES_BY_ID[id];
+  if (!d || stockCount(id) <= 0) return;
+  if (state.plots[index] || deviceAt(index)) return;
+  takeSprinkler(id);
+  state.defences[index] = id;
+  syncAllPlots();
+  ui.toast(`Placed a ${d.name} — ${d.desc}`, 'gold');
+  sfx.buy(); ui.refresh(); save();
+}
+
+function removeDefence(index) {
+  const id = state.defences[index];
+  const d = DEFENCES_BY_ID[id];
+  if (!d) return;
+  state.defences[index] = null;
+  addSprinkler(id, 1);
+  syncAllPlots();
+  ui.toast(`Picked up the ${d.name}`);
+  sfx.dig(); ui.refresh(); save();
+}
+
+function buyProp(id) {
+  const p = PROPS_BY_ID[id];
+  if (!p) return;
+  if (!spend(p.cost)) { ui.toast('Not enough sheckles.', 'bad'); sfx.deny(); return; }
+  addSprinkler(id, 1);
+  ui.select(id);
+  ui.toast(`Bought a ${p.name} — aim at the ground and press E to set it down`, 'gold');
+  sfx.buy(); ui.refresh(); save();
+}
+
+/** Decorations go anywhere on the grass, not on the plots. */
+function placeProp(id, x, z) {
+  const spec = PROPS_BY_ID[id];
+  if (!spec || stockCount(id) <= 0) return false;
+  if (Math.hypot(x, z) > 60) { ui.toast('Too far from the garden.', 'bad'); sfx.deny(); return false; }
+  takeSprinkler(id);
+  const entry = { id, x: +x.toFixed(2), z: +z.toFixed(2), r: player.yaw + Math.PI };
+  state.props.push(entry);
+  addPropMesh(entry);
+  ui.toast(`Placed a ${spec.name}`);
+  sfx.buy(); ui.refresh(); save();
+  return true;
+}
+
+function removeNearestProp(x, z) {
+  let best = -1, bestD = 2.2;
+  state.props.forEach((p, i) => {
+    const d = Math.hypot(p.x - x, p.z - z);
+    if (d < bestD) { bestD = d; best = i; }
+  });
+  if (best < 0) return false;
+  const [gone] = state.props.splice(best, 1);
+  const mesh = propMeshes.get(gone);
+  if (mesh) { scene.remove(mesh); propMeshes.delete(gone); }
+  addSprinkler(gone.id, 1);
+  ui.toast(`Picked up the ${PROPS_BY_ID[gone.id].name}`);
+  sfx.dig(); ui.refresh(); save();
+  return true;
+}
+
+const propMeshes = new Map();
+
+function addPropMesh(entry) {
+  const mesh = buildProp(entry.id);
+  if (!mesh) return;
+  mesh.position.set(entry.x, 0, entry.z);
+  mesh.rotation.y = entry.r || 0;
+  scene.add(mesh);
+  propMeshes.set(entry, mesh);
+}
+
+function syncProps() {
+  for (const [entry, mesh] of propMeshes) {
+    if (!state.props.includes(entry)) { scene.remove(mesh); propMeshes.delete(entry); }
+  }
+  for (const entry of state.props) if (!propMeshes.has(entry)) addPropMesh(entry);
+}
+
 function buyPack(packId) {
   const pack = PACKS.find(p => p.id === packId);
   if (!pack) return;
@@ -394,6 +493,7 @@ function harvest(index) {
 function digUp(index) {
   if (state.sprinklers[index]) { removeSprinkler(index); return; }
   if (state.turrets[index]) { removeTurret(index); return; }
+  if (state.defences[index]) { removeDefence(index); return; }
   const plot = state.plots[index];
   if (!plot) return;
   const p = PLANTS_BY_ID[plot.plantId];
@@ -469,6 +569,18 @@ function syncPlot(i) {
     const m = buildTurret(TURRETS_BY_ID[turId]);
     view.cropAnchor.add(m);
     view.turret = m;
+  }
+
+  // Scarecrow, trap or lamp standing on this plot.
+  const defId = owned ? state.defences[i] : null;
+  if (view.defence && view.defence.userData.spec.id !== defId) {
+    view.cropAnchor.remove(view.defence);
+    view.defence = null;
+  }
+  if (defId && !view.defence) {
+    const m = buildProp(defId);
+    view.cropAnchor.add(m);
+    view.defence = m;
   }
 
   // Watered ground reads darker.
@@ -704,6 +816,70 @@ function updatePets(dt, t) {
   }
 }
 
+// ---------------------------------------------------------------- thieves
+
+const thieves = new ThiefPack(scene, {
+  plotCells: () => cellList,
+  ripePlots: () => state.plots
+    .map((p, i) => (p && stealable(i) && isRipe(p, i) ? i : -1)).filter(i => i >= 0),
+  valueOf: i => {
+    const plot = state.plots[i];
+    const plant = PLANTS_BY_ID[plot?.plantId];
+    return plant ? cropValue(plant, plot.mut, plot.diet) : 0;
+  },
+  defenceAt: (x, z, kind) => defenceCover(x, z, kind),
+  onSteal: (index, loot) => {
+    const plot = state.plots[index];
+    const plant = PLANTS_BY_ID[plot?.plantId];
+    if (!plant || !isRipe(plot, index) || !stealable(index)) return 0;
+    const worth = cropValue(plant, plot.mut, plot.diet);
+    // The crop is gone: the picking is spent as if harvested, with no payout.
+    plot.taken = (plot.taken || 0) + loot;
+    if (plot.taken >= plant.harvests) state.plots[index] = null;
+    else { plot.plantedAt = Date.now(); plot.watered = false; plot.mut = undefined; }
+    state.stats.robbed = (state.stats.robbed || 0) + 1;
+    syncPlot(index);
+    ui.toast(`🦝 A thief made off with your ${plant.name} — <b>₪${fmt(worth)}</b> gone!`, 'bad');
+    sfx.deny();
+    gamepad.rumble(0.6, 300);
+    save();
+    return loot;
+  },
+  onScared: (th, atPlot) => {
+    ui.toast(`${atPlot ? '😤' : '😱'} A ${th.spec.name} turned tail${atPlot ? ' empty-handed' : ''}.`);
+  },
+  onCaught: th => {
+    const reward = Math.floor(th.maxHp * 40);
+    earn(reward);
+    state.stats.thievesCaught = (state.stats.thievesCaught || 0) + 1;
+    burst({ x: th.mesh.position.x, z: th.mesh.position.z }, th.spec.color);
+    ui.toast(`👮 Caught a ${th.spec.name}! <b class="coin">+₪${fmt(reward)}</b>`, 'gold');
+    sfx.squish();
+    ui.refresh();
+    save();
+  },
+});
+
+let thiefClock = 0;
+
+/** After dark, someone always fancies your crops. */
+function updateThieves(dt, t) {
+  thieves.update(dt, t);
+
+  if (!isNight()) { thiefClock = 0; return; }
+  thiefClock += dt;
+  const every = Math.max(12, 40 - state.owned * 0.6);
+  if (thiefClock < every) return;
+  thiefClock = 0;
+  if (thieves.count >= 6) return;
+
+  const th = thieves.spawn(state.owned, state.prestiges);
+  if (th) {
+    ui.toast(`🌙 A <b>${th.spec.name}</b> is sneaking into the garden!`, 'bad');
+    sfx.raid();
+  }
+}
+
 // ---------------------------------------------------------------- sky & weather
 
 const sky = new Sky(scene, world.sun, world.hemi);
@@ -919,12 +1095,23 @@ function fireWeapon() {
   if (w.kind === 'melee' || w.kind === 'spray') {
     // Everything in a short arc ahead of you.
     const reach = origin.clone().addScaledVector(dir, w.range * 0.6);
-    for (const bug of bugs.near(reach.x, reach.z, w.kind === 'spray' ? w.splash : 1.6)) {
-      bugs.damage(bug, w.damage); hits++;
-    }
+    const spread = w.kind === 'spray' ? w.splash : 1.6;
+    for (const bug of bugs.near(reach.x, reach.z, spread)) { bugs.damage(bug, w.damage); hits++; }
+    for (const th of thieves.near(reach.x, reach.z, spread)) { thieves.damage(th, w.damage); hits++; }
     if (w.kind === 'spray') waterBurst(scene, reach.x, reach.z, 1.4, effects);
   } else {
-    const bug = bugs.pick(origin, dir, w.range);
+    let bug = bugs.pick(origin, dir, w.range);
+    if (!bug) {
+      // Thieves are fair game for the same shot.
+      const th = thieves.nearest(origin.x + dir.x * w.range * 0.5, origin.z + dir.z * w.range * 0.5, w.range * 0.5);
+      if (th) {
+        tracer(scene, muzzle, th.mesh.position.clone().setY(0.6), tint, effects, 0.05);
+        thieves.damage(th, w.damage);
+        sfx.shoot(w.kind);
+        gamepad.rumble(0.25, 70);
+        return;
+      }
+    }
     const end = bug ? bug.mesh.position.clone().setY(bug.mesh.position.y + 0.3) : origin.clone().addScaledVector(dir, w.range);
     tracer(scene, muzzle, end, tint, effects, w.kind === 'chain' ? 0.07 : 0.04);
     if (bug) {
@@ -957,14 +1144,16 @@ function updateTurrets(dt) {
     const view = world.plots[i];
     if (!view.turret) continue;
     const spec = view.turret.userData.spec;
-    const target = bugs.nearest(view.x, view.z, spec.range);
+    const target = bugs.nearest(view.x, view.z, spec.range)
+      || thieves.nearest(view.x, view.z, spec.range);
     animateTurret(view.turret, dt, target?.mesh.position);
     view.turret.userData.cooldown -= dt;
     if (target && view.turret.userData.cooldown <= 0) {
       view.turret.userData.cooldown = 1 / spec.rate;
       const from = new THREE.Vector3(view.x, 1.0, view.z);
       tracer(scene, from, target.mesh.position.clone().setY(0.3), TIERS[spec.tier].color, effects, 0.045);
-      bugs.damage(target, spec.damage);
+      if (bugs.bugs.includes(target)) bugs.damage(target, spec.damage);
+      else thieves.damage(target, spec.damage);
     }
   }
 }
@@ -1132,12 +1321,33 @@ function interact() {
     if (!plot && deviceAt(i)) return;
     if (!plot && SPRINKLERS_BY_ID[ui.selected]) { placeSprinkler(i); return; }
     if (!plot && TURRETS_BY_ID[ui.selected]) { placeTurret(i); return; }
+    if (!plot && DEFENCES_BY_ID[ui.selected]) { placeDefence(i); return; }
     if (!plot) plant(i);
     else if (isRipe(plot, i)) harvest(i);
     else ui.toast(`${PLANTS_BY_ID[plot.plantId].name} is still growing.`);
     return;
   }
+  // Decorations drop on the grass wherever you are looking.
+  if (PROPS_BY_ID[ui.selected]) {
+    const spot = groundAim();
+    if (spot) { placeProp(ui.selected, spot.x, spot.z); return; }
+  }
+  if (player.shovel) {
+    const spot = groundAim();
+    if (spot && removeNearestProp(spot.x, spot.z)) return;
+  }
   if (nearStall()) ui.toggleShop(true);
+}
+
+/** Where the player is looking on the ground, or null if they are aiming at the sky. */
+const _groundHit = new THREE.Vector3();
+function groundAim() {
+  const origin = player.headPosition();
+  const dir = player.lookDirection();
+  if (dir.y >= -0.05) return null;
+  const t = -origin.y / dir.y;
+  if (t > 18) return null;
+  return _groundHit.copy(origin).addScaledVector(dir, t);
 }
 
 // ---------------------------------------------------------------- input
@@ -1373,10 +1583,14 @@ function tick() {
   bugs.update(dt, t, camera);
   updateTurrets(dt);
   updateCarnivores(dt);
+  updateThieves(dt, t);
   fireCooldown = Math.max(0, fireCooldown - dt);
   if (player.weapon && using) fireWeapon();
   player.swing = Math.max(0, player.swing - dt * 4);
-  ui.setBugCount(bugs.count);
+  ui.setBugCount(bugs.count, thieves.count);
+  const night = isNight(phase);
+  for (const mesh of propMeshes.values()) litProp(mesh, night);
+  for (const v of world.plots) if (v.defence) litProp(v.defence, night);
   const boss = bugs.activeBoss;
   ui.setBoss(boss ? { name: boss.spec.name, hp: boss.hp, maxHp: boss.maxHp } : null);
   checkTrophies(dt);
@@ -1437,13 +1651,15 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { build: BUILD_LABEL, sky, petPack, callPets, updateCarnivores, updateLure, petPower,
+window.game = { build: BUILD_LABEL, sky, petPack, thieves, callPets, updateCarnivores, updateLure, petPower,
+                buyDefence, placeDefence, buyProp, placeProp, syncProps, updateThieves,
                 growth, isRipe, feedProgress, cropValue, fmt, PLANTS_BY_ID, feedNearestPet, doGoldenHarvest, updateWeather, sellDevice, buyEgg, hatchEgg, buyUpgrade, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
                 placeSprinkler, buyWeapon, buyTurret, placeTurret, bugs, startRaid, fireWeapon,
                 waterPlot, refreshSprinklers, plotSpeed, state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
 
 restoreBugs();
 syncPets();
+syncProps();
 syncAllPlots();
 ui.refresh();
 document.getElementById('loading').remove();
