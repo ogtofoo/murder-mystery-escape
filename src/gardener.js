@@ -1,6 +1,7 @@
 // The gardener: a low-poly character with a straw hat, animated limbs.
 
 import * as THREE from 'three';
+import { HATS_BY_ID, OUTFITS_BY_ID } from './data.js';
 
 const SKIN = 0xe8b48c;
 const SHIRT = 0x3f7d4e;
@@ -46,10 +47,11 @@ export function buildGardener() {
   const head = new THREE.Group();
   head.position.set(0, 1.6, 0);
   head.add(box(0.34, 0.34, 0.32, SKIN, [0, 0, 0]));
-  head.add(box(0.62, 0.05, 0.62, HAT, [0, 0.2, 0]));           // hat brim
-  head.add(box(0.34, 0.16, 0.32, HAT, [0, 0.29, 0]));          // hat crown
   head.add(box(0.06, 0.06, 0.02, 0x2b2b2b, [-0.09, 0.03, 0.165]));
   head.add(box(0.06, 0.06, 0.02, 0x2b2b2b, [0.09, 0.03, 0.165]));
+  const hat = new THREE.Group();
+  hat.position.y = 0.2;
+  head.add(hat);
   body.add(head);
 
   const armL = new THREE.Group(); armL.position.set(-0.34, 1.36, 0);
@@ -70,7 +72,9 @@ export function buildGardener() {
   shovel.visible = false;
   armR.add(shovel);
 
-  root.userData = { body, head, armL, armR, legL, legR, shovel, phase: 0 };
+  const torso = body.children[0];
+  root.userData = { body, head, hat, armL, armR, legL, legR, shovel, torso, arms: [armL, armR], phase: 0 };
+  setHat(root, 'straw');
   return root;
 }
 
@@ -79,6 +83,81 @@ export function buildGardener() {
  * @param {boolean} grounded
  */
 export function setShovel(g, on) { g.userData.shovel.visible = on; }
+
+/** Swap the gardener's hat for another. */
+export function setHat(g, id) {
+  const spec = HATS_BY_ID[id] || HATS_BY_ID.straw;
+  const hat = g.userData.hat;
+  if (hat.userData.id === spec.id) return;
+  hat.userData.id = spec.id;
+  hat.clear();
+  const c = spec.color;
+  switch (spec.id) {
+    case 'cap':
+      hat.add(box(0.36, 0.14, 0.34, c, [0, 0.05, 0]));
+      hat.add(box(0.34, 0.04, 0.26, c, [0, 0, 0.28]));                       // peak
+      break;
+    case 'bucket':
+      hat.add(box(0.38, 0.18, 0.36, c, [0, 0.07, 0]));
+      hat.add(box(0.56, 0.05, 0.54, c, [0, 0, 0]));
+      break;
+    case 'cowboy':
+      hat.add(box(0.72, 0.05, 0.6, c, [0, 0, 0]));
+      hat.add(box(0.34, 0.2, 0.32, c, [0, 0.11, 0]));
+      hat.add(box(0.36, 0.05, 0.34, 0x3e2723, [0, 0.03, 0]));
+      break;
+    case 'top':
+      hat.add(box(0.56, 0.05, 0.54, c, [0, 0, 0]));
+      hat.add(box(0.32, 0.42, 0.3, c, [0, 0.22, 0]));
+      hat.add(box(0.34, 0.06, 0.32, 0xd32f2f, [0, 0.06, 0]));
+      break;
+    case 'wizard': {
+      hat.add(box(0.62, 0.05, 0.6, c, [0, 0, 0]));
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.7, 7),
+        new THREE.MeshStandardMaterial({ color: c, flatShading: true, roughness: 0.8 }));
+      cone.position.y = 0.36;
+      cone.castShadow = true;
+      hat.add(cone);
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2;
+        hat.add(box(0.06, 0.06, 0.06, 0xffe082, [Math.cos(a) * 0.14, 0.25 + (i % 2) * 0.2, Math.sin(a) * 0.14]));
+      }
+      break;
+    }
+    case 'crown': {
+      hat.add(box(0.4, 0.1, 0.38, c, [0, 0.04, 0]));
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.16, 4),
+          new THREE.MeshStandardMaterial({ color: c, flatShading: true, metalness: 0.7, roughness: 0.3 }));
+        spike.position.set(Math.cos(a) * 0.17, 0.16, Math.sin(a) * 0.17);
+        hat.add(spike);
+      }
+      break;
+    }
+    case 'halo': {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.035, 6, 14),
+        new THREE.MeshBasicMaterial({ color: c }));
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.24;
+      hat.add(ring);
+      break;
+    }
+    default:
+      hat.add(box(0.62, 0.05, 0.62, c, [0, 0, 0]));                          // straw brim
+      hat.add(box(0.34, 0.16, 0.32, c, [0, 0.09, 0]));
+  }
+}
+
+/** Recolour the gardener's clothes. */
+export function setOutfit(g, id) {
+  const spec = OUTFITS_BY_ID[id] || OUTFITS_BY_ID.green;
+  g.userData.torso.material.color.setHex(spec.color);
+  for (const arm of g.userData.arms) {
+    const sleeve = arm.children[0];
+    if (sleeve) sleeve.material.color.setHex(spec.color);
+  }
+}
 
 export function animateGardener(g, dt, speed01, grounded, t, digging = 0, attack = 0) {
   const u = g.userData;

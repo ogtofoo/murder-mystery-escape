@@ -222,12 +222,19 @@ Weather rolls every few minutes and changes how the garden behaves:
 | ❄️ Frost | 1.5× | Chilled (2×) and rare **Frozen** crops (10×) |
 | 🌈 Rainbow Sky | 1.35× | 14× the chance of a Silver, Gold or Rainbow crop |
 | ☄️ Meteor Shower | 1.25× | Night only — rare **Celestial** crops (120×) |
+| 🌕 Harvest Moon | 1.6× | Night only — a huge orange moon and **26× variant luck** |
+| 🌌 Aurora | 1.4× | Night only — shimmering curtains, Chilled and Celestial crops |
+| 🌝 MEGA Moon | 1.3× | Night only — **22× the chance of a MEGA crop** |
+| 🔴 Blood Moon | 1.2× | Night only — a red sky, and bug raids come twice as often |
 
 ### 🧬 Mutations — the thing worth bragging about
 
 A crop rolls its mutation the moment it finishes ripening, so you *see* what you got before you
 pick it. Gold plates the whole plant, Rainbow cycles through every colour, and the weather marks
 make it glow.
+
+**MEGA**: a rare roll that grows the crop to more than twice its size and multiplies its value
+**15×**. It stacks with everything, and a MEGA Moon makes it 22× more likely.
 
 **Variants** (one at a time): Silver **5×** · Gold **20×** · Rainbow **50×**
 **Weather marks** (one at a time): Wet **2×** · Chilled **2×** · Frozen **10×** · Shocked **50×** · Celestial **120×**
@@ -270,6 +277,19 @@ once-a-week event.
 Five permanent upgrades with **no level cap**, so sheckles always have somewhere to go: growth
 speed, crop value, mutation luck, bug bounty and Golden Seed gain. Costs roughly double each
 level, running from millions into the sextillions. They survive a Golden Harvest.
+
+### 📋 Daily quests
+
+Three fresh jobs every day — harvest crops, plant seeds, squash bugs, catch thieves, feed pets,
+open packs, feed carnivores, find mutations — sized to how far along your garden is and paid in
+sheckles scaled to your wealth. Play on consecutive days and a **streak** adds +10% per day to
+every reward. They reset at midnight.
+
+### 🎩 Wardrobe
+
+Eight hats and eight outfits for the gardener, from a ball cap to a wizard hat. Most are bought
+with sheckles; the **Golden Crown**, **Halo** and **Solid Gold** outfit are earned by trophies
+instead.
 
 ### 🏅 Ranks
 

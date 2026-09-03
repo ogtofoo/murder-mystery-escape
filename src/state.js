@@ -7,7 +7,8 @@ import { PLOT_COUNT, PLANTS_BY_ID, plotCost, plotLayout, LAYOUT_ID,
          PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS_BY_ID,
          TREAT_VALUE, HAPPY_MAX, HAPPY_DECAY_PER_MIN, happyBonus,
          UPGRADES, UPGRADES_BY_ID, upgradeCost, rankFor, dietBonus, dietSummary,
-         DEFENCES_BY_ID, PROPS_BY_ID } from './data.js';
+         DEFENCES_BY_ID, PROPS_BY_ID, HATS_BY_ID, OUTFITS_BY_ID,
+         QUEST_BY_ID, today, rollQuests, questReward } from './data.js';
 
 const SAVE_KEY = 'sheckle-garden-save-v1';
 export const SAVE_VERSION = 2;
@@ -34,6 +35,9 @@ function freshState() {
     trophies: {},       // claimed trophy ids
     defences: new Array(PLOT_COUNT).fill(null),  // scarecrows, traps and lamps on plots
     props: [],                                   // decorations dotted around the garden
+    quests: { day: '', list: [], streak: 0 },
+    hat: 'straw', outfit: 'green',
+    hats: { straw: true }, outfits: { green: true },
     weather: 'clear',
     weatherUntil: 0,
     best: { mult: 1, name: '', plant: null },   // finest crop ever pulled
@@ -94,6 +98,25 @@ function sanitize(raw) {
     const lv = Math.floor(raw.upgrades?.[u.id] || 0);
     if (lv > 0) s.upgrades[u.id] = lv;
   }
+  s.hats = { straw: true };
+  for (const id of Object.keys(raw.hats || {})) if (HATS_BY_ID[id]) s.hats[id] = true;
+  s.outfits = { green: true };
+  for (const id of Object.keys(raw.outfits || {})) if (OUTFITS_BY_ID[id]) s.outfits[id] = true;
+  s.hat = s.hats[raw.hat] ? raw.hat : 'straw';
+  s.outfit = s.outfits[raw.outfit] ? raw.outfit : 'green';
+
+  const q = raw.quests;
+  s.quests = {
+    day: typeof q?.day === 'string' ? q.day : '',
+    streak: Number.isFinite(q?.streak) ? Math.max(0, Math.floor(q.streak)) : 0,
+    list: Array.isArray(q?.list)
+      ? q.list.filter(x => QUEST_BY_ID[x?.id]).slice(0, 3).map(x => ({
+          id: x.id, goal: Math.max(1, Math.floor(x.goal) || 1),
+          base: Math.max(0, x.base || 0), claimed: !!x.claimed,
+        }))
+      : [],
+  };
+
   s.weather = WEATHERS[raw.weather] ? raw.weather : 'clear';
   s.weatherUntil = Number.isFinite(raw.weatherUntil) ? raw.weatherUntil : 0;
   s.best = raw.best && Number.isFinite(raw.best.mult) ? raw.best : { mult: 1, name: '', plant: null };
@@ -297,6 +320,41 @@ export function luckMultiplier() {
 }
 
 export function rank() { return rankFor(state.stats.earned); }
+
+// ---- daily quests -----------------------------------------------------
+
+/** Hand out a fresh set if the day has turned over. Returns true if it did. */
+export function refreshQuests() {
+  const day = today();
+  if (state.quests.day === day && state.quests.list.length) return false;
+  // A day missed breaks the streak; a day in a row extends it.
+  const prev = state.quests.day;
+  if (prev) {
+    const gap = (new Date(day) - new Date(prev)) / 86400000;
+    state.quests.streak = gap === 1 ? (state.quests.streak || 0) + 1 : 0;
+  }
+  state.quests.day = day;
+  state.quests.list = rollQuests(state);
+  return true;
+}
+
+export function questProgress(q) {
+  const type = QUEST_BY_ID[q.id];
+  return type ? Math.max(0, type.at(state) - q.base) : 0;
+}
+
+export function questDone(q) { return questProgress(q) >= q.goal; }
+
+/** Collect a finished quest. Returns what it paid, or 0. */
+export function claimQuest(index) {
+  const q = state.quests.list[index];
+  if (!q || q.claimed || !questDone(q)) return 0;
+  q.claimed = true;
+  const streakBonus = 1 + Math.min(1, (state.quests.streak || 0) * 0.1);
+  const paid = Math.floor(questReward(state, index) * streakBonus);
+  earn(paid);
+  return paid;
+}
 
 /** What a crop is worth: base × mutation × Golden Seeds × pets × upgrades × diet. */
 export function cropValue(plant, mut = null, diet = null) {

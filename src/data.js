@@ -368,6 +368,76 @@ export function upgradeCost(u, level) {
   return Math.floor(u.base * Math.pow(u.scale, level));
 }
 
+// ---- Wardrobe ----------------------------------------------------------
+
+/** Hats for the gardener. A couple are earned rather than bought. */
+export const HATS = [
+  { id:'straw',  name:'Straw Hat',    cost:0,     color:0xe8c377 },
+  { id:'cap',    name:'Ball Cap',     cost:60000, color:0x2196f3 },
+  { id:'bucket', name:'Bucket Hat',   cost:4e6,   color:0x8bc34a },
+  { id:'cowboy', name:'Cowboy Hat',   cost:2e8,   color:0x795548 },
+  { id:'top',    name:'Top Hat',      cost:9e10,  color:0x263238 },
+  { id:'wizard', name:'Wizard Hat',   cost:5e12,  color:0x5e35b1 },
+  { id:'crown',  name:'Golden Crown', cost:0,     color:0xffd54f, needTrophy:'land36' },
+  { id:'halo',   name:'Halo',         cost:0,     color:0xfff59d, needTrophy:'rankgod' },
+];
+export const HATS_BY_ID = Object.fromEntries(HATS.map(h => [h.id, h]));
+
+/** Outfit colours. */
+export const OUTFITS = [
+  { id:'green',  name:'Gardener Green', cost:0,     color:0x3f7d4e },
+  { id:'blue',   name:'Denim',          cost:20000, color:0x3f51b5 },
+  { id:'red',    name:'Barn Red',       cost:1e6,   color:0xc62828 },
+  { id:'purple', name:'Royal Purple',   cost:6e8,   color:0x7b1fa2 },
+  { id:'orange', name:'Pumpkin',        cost:3e10,  color:0xef6c00 },
+  { id:'black',  name:'Midnight',       cost:2e12,  color:0x212121 },
+  { id:'pink',   name:'Blossom',        cost:8e13,  color:0xec407a },
+  { id:'gold',   name:'Solid Gold',     cost:0,     color:0xffc107, needTrophy:'golden1' },
+];
+export const OUTFITS_BY_ID = Object.fromEntries(OUTFITS.map(o => [o.id, o]));
+
+// ---- Daily quests ------------------------------------------------------
+
+/**
+ * Three fresh goals a day, each measured against a snapshot of your stats
+ * taken when the quest was handed out.
+ */
+export const QUEST_TYPES = [
+  { id:'harvest',  text:n => `Harvest ${n} crops`,            picks:[15, 30, 60],       at:s => s.stats.harvested },
+  { id:'plant',    text:n => `Plant ${n} seeds`,              picks:[10, 20, 40],       at:s => s.stats.planted || 0 },
+  { id:'bugs',     text:n => `Squash ${n} bugs`,              picks:[10, 25, 50],       at:s => s.stats.bugsKilled },
+  { id:'thieves',  text:n => `Catch ${n} thieves`,            picks:[2, 5, 10],         at:s => s.stats.thievesCaught || 0 },
+  { id:'treats',   text:n => `Feed your pets ${n} treats`,    picks:[3, 8, 15],         at:s => s.stats.treats || 0 },
+  { id:'packs',    text:n => `Open ${n} seed packs`,          picks:[1, 3, 6],          at:s => s.stats.packsOpened },
+  { id:'eaten',    text:n => `Feed carnivores ${n} bugs`,     picks:[5, 15, 30],        at:s => s.stats.eaten || 0 },
+  { id:'mutations',text:n => `Harvest ${n} mutated crops`,    picks:[3, 8, 20],         at:s => s.stats.mutated || 0 },
+];
+export const QUEST_BY_ID = Object.fromEntries(QUEST_TYPES.map(q => [q.id, q]));
+
+/** Today's date as a plain string, so a new day means new quests. */
+export function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Roll three different quests, sized to how far along the garden is. */
+export function rollQuests(state) {
+  const pool = [...QUEST_TYPES];
+  const size = state.owned >= 24 ? 2 : state.owned >= 10 ? 1 : 0;
+  const out = [];
+  for (let i = 0; i < 3 && pool.length; i++) {
+    const q = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+    out.push({ id: q.id, goal: q.picks[size], base: q.at(state), claimed: false });
+  }
+  return out;
+}
+
+/** Quest payout scales with what a crop is worth to you now. */
+export function questReward(state, index) {
+  const base = Math.max(5000, state.stats.earned / 900);
+  return Math.floor(base * (index + 1) * 1.5);
+}
+
 // ---- Ranks -------------------------------------------------------------
 
 export const RANKS = [
@@ -409,6 +479,10 @@ export const WEATHERS = {
   frost:   { id:'frost',   name:'Frost',         icon:'❄️', growth:1.5,  weight:12,  mins:[2, 4], mutations:[['chilled', 0.5], ['frozen', 0.09]] },
   rainbow: { id:'rainbow', name:'Rainbow Sky',   icon:'🌈', growth:1.35, weight:4,   mins:[1, 2], mutations:[['wet', 0.3]], variantLuck: 14 },
   meteor:  { id:'meteor',  name:'Meteor Shower', icon:'☄️', growth:1.25, weight:3,   mins:[1, 2], mutations:[['celestial', 0.14]], nightOnly: true },
+  harvest: { id:'harvest', name:'Harvest Moon',  icon:'🌕', growth:1.6,  weight:4,   mins:[2, 3], mutations:[], variantLuck: 26, nightOnly: true, moon: 0xffb74d },
+  aurora:  { id:'aurora',  name:'Aurora',        icon:'🌌', growth:1.4,  weight:4,   mins:[2, 3], mutations:[['celestial', 0.09], ['chilled', 0.4]], nightOnly: true, sky: 0x1b3a4b },
+  megamoon:{ id:'megamoon',name:'MEGA Moon',     icon:'🌝', growth:1.3,  weight:2,   mins:[1, 2], mutations:[], megaLuck: 22, nightOnly: true, moon: 0xe1f5fe },
+  blood:   { id:'blood',   name:'Blood Moon',    icon:'🔴', growth:1.2,  weight:3,   mins:[2, 3], mutations:[['shocked', 0.04]], nightOnly: true, moon: 0xff5252, sky: 0x3b1220, fierce: true },
 };
 
 /** Pick the next weather, given whether it is currently night. */
@@ -430,6 +504,10 @@ export const VARIANTS = [
   { id:'rainbow', name:'Rainbow', mult:50, weight:2,    color:0xff4fd8 },
 ];
 export const VARIANTS_BY_ID = Object.fromEntries(VARIANTS.map(v => [v.id, v]));
+
+/** A MEGA crop is enormous and worth a fortune. Rare, and stacks with everything. */
+export const MEGA_MULT = 15;
+export const MEGA_CHANCE = 0.012;
 
 /** Weather marks. Also one at a time, and they multiply on top of the variant. */
 export const MARKS = {
@@ -455,27 +533,34 @@ export function rollMutation(weather, extraLuck = 1) {
   for (const [id, chance] of w.mutations) {
     if (Math.random() < chance) { mark = id; break; }   // best listed mark wins
   }
-  return (variant === 'normal' && !mark) ? null : { v: variant, m: mark };
+
+  const mega = Math.random() < MEGA_CHANCE * (w.megaLuck || 1) * Math.max(1, extraLuck) ** 0.5;
+
+  return (variant === 'normal' && !mark && !mega) ? null : { v: variant, m: mark, mega };
 }
 
 /** How much a mutation multiplies a crop's value. */
 export function mutationMultiplier(mut) {
   if (!mut) return 1;
-  return (VARIANTS_BY_ID[mut.v]?.mult || 1) * (MARKS[mut.m]?.mult || 1);
+  return (VARIANTS_BY_ID[mut.v]?.mult || 1) * (MARKS[mut.m]?.mult || 1) * (mut.mega ? MEGA_MULT : 1);
 }
 
 /** "Rainbow Shocked" — for toasts and prompts. */
 export function mutationName(mut) {
   if (!mut) return '';
-  return [VARIANTS_BY_ID[mut.v]?.name, MARKS[mut.m]?.name].filter(Boolean).join(' ');
+  return [mut.mega ? 'MEGA' : '', VARIANTS_BY_ID[mut.v]?.name, MARKS[mut.m]?.name].filter(Boolean).join(' ');
 }
 
 /** The colour a mutated crop should glow. */
 export function mutationColor(mut) {
   if (!mut) return null;
   if (mut.v !== 'normal') return VARIANTS_BY_ID[mut.v].color;
-  return MARKS[mut.m]?.color ?? null;
+  if (MARKS[mut.m]) return MARKS[mut.m].color;
+  return mut.mega ? 0xffab40 : null;
 }
+
+/** How much bigger a MEGA crop grows. */
+export function mutationScale(mut) { return mut?.mega ? 2.3 : 1; }
 
 // ---- Golden Harvest (prestige) ----------------------------------------
 

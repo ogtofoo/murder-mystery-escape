@@ -6,10 +6,12 @@ import { PLANTS, PLANTS_BY_ID, PACKS, TIERS, TIER_ORDER, PLOT_COUNT, fmt, refund
          goldenMultiplier, WEATHERS, VARIANTS, MARKS, mutationMultiplier,
          PETS, PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS, ABILITY_TEXT,
          DEFENCES, DEFENCES_BY_ID, PROPS, PROPS_BY_ID, THIEVES,
+         HATS, OUTFITS, QUEST_BY_ID, questReward,
          moodOf, happyBonus, TREAT_VALUE,
          UPGRADES, upgradeCost, rankFor, nextRank } from './data.js';
 import { state, seedCount, stockCount, goldenPending, canGoldenHarvest, trophyProgress, cropValue,
-         upgradeLevel, nextUpgradeCost, equippedPets, luckMultiplier } from './state.js';
+         upgradeLevel, nextUpgradeCost, equippedPets, luckMultiplier,
+         questProgress, questDone } from './state.js';
 
 const $ = sel => document.querySelector(sel);
 
@@ -261,6 +263,8 @@ export class UI {
     if (this.tab === 'seeds') this.renderSeeds();
     else if (this.tab === 'packs') this.renderPacks();
     else if (this.tab === 'tools') this.renderTools();
+    else if (this.tab === 'quests') this.renderQuests();
+    else if (this.tab === 'wardrobe') this.renderWardrobe();
     else if (this.tab === 'props') this.renderGarden();
     else if (this.tab === 'pets') this.renderPets();
     else if (this.tab === 'mastery') this.renderMastery();
@@ -455,6 +459,73 @@ export class UI {
     }
     for (const b of this.el.body.querySelectorAll('[data-sprinkler]')) {
       b.addEventListener('click', () => this.hooks.buySprinkler(b.dataset.sprinkler));
+    }
+  }
+
+  renderQuests() {
+    const streak = state.quests.streak || 0;
+    let html = `<div class="tierhead">Three fresh jobs every day${streak ? ` · <b style="color:var(--gold)">${streak}-day streak, +${streak * 10}% rewards</b>` : ''} ·
+      they reset at midnight</div>`;
+    if (!state.quests.list.length) {
+      html += `<div class="row"><div class="stripe" style="background:#666"></div>
+        <div><div class="name">No quests yet</div><div class="meta">Come back in a moment.</div></div>
+        <div class="own"></div><div></div></div>`;
+    }
+    state.quests.list.forEach((q, i) => {
+      const type = QUEST_BY_ID[q.id];
+      const now = Math.min(questProgress(q), q.goal);
+      const done = questDone(q);
+      const pay = Math.floor(questReward(state, i) * (1 + Math.min(1, streak * 0.1)));
+      html += `<div class="trophy ${q.claimed ? 'done' : ''}">
+        <div class="mark">${q.claimed ? '✅' : done ? '🎁' : '📋'}</div>
+        <div>
+          <div class="nm">${type.text(q.goal)}</div>
+          <div class="hint">${fmt(now)} / ${fmt(q.goal)}</div>
+          ${q.claimed ? '' : `<div class="track"><i style="width:${(now / q.goal * 100).toFixed(0)}%"></i></div>`}
+        </div>
+        <div class="prize">${q.claimed ? 'collected'
+          : `<button class="buy" data-quest="${i}" ${done ? '' : 'disabled'}>₪ ${fmt(pay)}</button>`}</div>
+      </div>`;
+    });
+    this.el.body.innerHTML = html;
+    for (const b of this.el.body.querySelectorAll('[data-quest]')) {
+      b.addEventListener('click', () => { this.hooks.claimQuest(Number(b.dataset.quest)); this.renderShop(); });
+    }
+  }
+
+  renderWardrobe() {
+    const row = (item, kind, owned, worn) => {
+      const locked = item.needTrophy && !state.trophies[item.needTrophy];
+      const label = worn ? '✓ wearing' : owned ? 'wear' : locked ? '🔒 locked' : `₪ ${fmt(item.cost)}`;
+      return `<div class="row ${locked && !owned ? 'locked' : ''}">
+        <div class="stripe" style="background:#${item.color.toString(16).padStart(6, '0')}"></div>
+        <div>
+          <div class="name">${item.name}</div>
+          <div class="meta">${locked && !owned ? `unlocked by the ${TROPHIES.find(t => t.id === item.needTrophy)?.name} trophy`
+            : owned ? 'in your wardrobe' : 'for sale'}</div>
+        </div>
+        <div class="own"></div>
+        <button class="buy" data-${kind}="${item.id}" ${worn || (locked && !owned) || (!owned && state.money < item.cost) ? 'disabled' : ''}>${label}</button>
+      </div>`;
+    };
+    let html = `<div class="tierhead">Hats</div>`;
+    for (const h of HATS) html += row(h, 'hat', !!state.hats[h.id], state.hat === h.id);
+    html += `<div class="tierhead">Outfits</div>`;
+    for (const o of OUTFITS) html += row(o, 'outfit', !!state.outfits[o.id], state.outfit === o.id);
+    this.el.body.innerHTML = html;
+    for (const b of this.el.body.querySelectorAll('[data-hat]')) {
+      b.addEventListener('click', () => {
+        const id = b.dataset.hat;
+        state.hats[id] ? this.hooks.wearHat(id) : this.hooks.buyHat(id);
+        this.renderShop();
+      });
+    }
+    for (const b of this.el.body.querySelectorAll('[data-outfit]')) {
+      b.addEventListener('click', () => {
+        const id = b.dataset.outfit;
+        state.outfits[id] ? this.hooks.wearOutfit(id) : this.hooks.buyOutfit(id);
+        this.renderShop();
+      });
     }
   }
 

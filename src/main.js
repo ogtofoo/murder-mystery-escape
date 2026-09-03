@@ -7,7 +7,7 @@ import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollPack, plotCost, PLOT_COUNT, refund
          mutationMultiplier, mutationName, mutationColor,
          PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS_BY_ID, rollPet, moodOf, TREAT_VALUE, lureRate,
          UPGRADES_BY_ID, upgradeCost, dietSummary, dietBonus, bugBite, PLANT_REGEN_PER_SEC,
-         DEFENCES_BY_ID, PROPS_BY_ID } from './data.js';
+         DEFENCES_BY_ID, PROPS_BY_ID, HATS_BY_ID, OUTFITS_BY_ID, mutationScale, WEATHERS as WX } from './data.js';
 import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount,
          growth, isRipe, isRegrowing, harvestsLeft, cycleSeconds,
          refreshSprinklers, plotSpeed, sprinklerSpeed, sprinklerAt, stockCount, addSprinkler, takeSprinkler,
@@ -15,9 +15,11 @@ import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spen
          cropValue, goldenPending, canGoldenHarvest, goldenHarvest, claimTrophies, weatherSpeed,
          equippedPets, petPower, petHarvestRange, luckMultiplier, upgradeLevel, nextUpgradeCost, rank,
          feedPet, decayHappiness, feedProgress, feedCarnivore,
-         defenceAt, defenceCover, stealable } from './state.js';
+         defenceAt, defenceCover, stealable,
+         refreshQuests, questProgress, questDone, claimQuest } from './state.js';
 import { buildWorld } from './world.js';
 import { buildPlant, animatePlant, applyMutation, setCarnivoreFruit } from './plants.js';
+import { setHat, setOutfit } from './gardener.js';
 import { buildSprinkler, animateSprinkler, buildCan, waterBurst,
          buildTurret, animateTurret, buildWeapon, tracer } from './devices.js';
 import { Player } from './player.js';
@@ -100,6 +102,30 @@ const ui = new UI({
   buyTurret: id => buyTurret(id),
   buyDefence: id => buyDefence(id),
   buyProp: id => buyProp(id),
+  claimQuest: i => {
+    const paid = claimQuest(i);
+    if (paid) { ui.toast(`📋 Quest reward <b class="coin">+₪${fmt(paid)}</b>`, 'gold'); sfx.pack(3); ui.refresh(); save(); }
+  },
+  buyHat: id => {
+    const h = HATS_BY_ID[id];
+    if (!h || state.hats[id]) return;
+    if (h.needTrophy && !state.trophies[h.needTrophy]) { ui.toast('Not unlocked yet.', 'bad'); sfx.deny(); return; }
+    if (h.cost && !spend(h.cost)) { ui.toast('Not enough sheckles.', 'bad'); sfx.deny(); return; }
+    state.hats[id] = true; state.hat = id;
+    setHat(player.model, id);
+    ui.toast(`Wearing the ${h.name}`); sfx.buy(); ui.refresh(); save();
+  },
+  wearHat: id => { if (state.hats[id]) { state.hat = id; setHat(player.model, id); ui.refresh(); save(); } },
+  buyOutfit: id => {
+    const o = OUTFITS_BY_ID[id];
+    if (!o || state.outfits[id]) return;
+    if (o.needTrophy && !state.trophies[o.needTrophy]) { ui.toast('Not unlocked yet.', 'bad'); sfx.deny(); return; }
+    if (o.cost && !spend(o.cost)) { ui.toast('Not enough sheckles.', 'bad'); sfx.deny(); return; }
+    state.outfits[id] = true; state.outfit = id;
+    setOutfit(player.model, id);
+    ui.toast(`Wearing ${o.name}`); sfx.buy(); ui.refresh(); save();
+  },
+  wearOutfit: id => { if (state.outfits[id]) { state.outfit = id; setOutfit(player.model, id); ui.refresh(); save(); } },
   sellDevice: (id, all) => sellDevice(id, all),
   toggleCan: () => toggleCan(),
   buyCan: id => buyCan(id),
@@ -389,6 +415,7 @@ function plant(index) {
                          fed: 0, diet: {}, php: spec.carnivore ? spec.hp : undefined };
   syncPlot(index);
   const planted = PLANTS_BY_ID[id];
+  state.stats.planted = (state.stats.planted || 0) + 1;
   ui.toast(`Planted ${planted.name}${planted.harvests > 1 ? ` — good for ${planted.harvests} harvests` : ''}`);
   sfx.plant();
   ui.refresh();
@@ -463,6 +490,7 @@ function harvest(index) {
   earn(paid);
   state.stats.harvested++;
   const mult = mutationMultiplier(mut);
+  if (mut) state.stats.mutated = (state.stats.mutated || 0) + 1;
   if (mult > (state.best?.mult || 1)) state.best = { mult, name: mutationName(mut), plant: p.id };
 
   // Multi-harvest crops stay in the ground and start a (faster) regrow cycle.
@@ -892,7 +920,7 @@ function updateWeather() {
   state.weather = w.id;
   const mins = w.mins[0] + Math.random() * (w.mins[1] - w.mins[0]);
   state.weatherUntil = now + mins * 60000;
-  sky.setWeather(w.id);
+  sky.setWeather(w.id, w);
   if (!first && w.id !== 'clear') {
     ui.toast(`${w.icon} <b>${w.name}</b> — ${w.growth > 1 ? `crops grow ${w.growth}× faster` : 'the sky turns'}`, 'gold');
     sfx.weather();
@@ -939,6 +967,7 @@ function restoreBugs() {
 function scheduleRaid(first = false) {
   let wait = first ? 90 + Math.random() * 60 : RAID_MIN + Math.random() * (RAID_MAX - RAID_MIN);
   if (isNight()) wait *= 0.6;                     // bugs are bolder after dark
+  if (WX[state.weather]?.fierce) wait *= 0.45;    // and a blood moon whips them up
   state.nextRaid = Date.now() + wait * 1000;
 }
 
@@ -1516,6 +1545,24 @@ function doGoldenHarvest() {
   save();
 }
 
+let questClock = 0;
+function checkQuests(dt) {
+  questClock += dt;
+  if (questClock < 1.5) return;
+  questClock = 0;
+  if (refreshQuests()) {
+    ui.toast(`📋 <b>New daily quests</b>${state.quests.streak ? ` · ${state.quests.streak}-day streak` : ''}`, 'gold');
+    save();
+  }
+  for (const q of state.quests.list) {
+    if (!q.claimed && questDone(q) && !q.announced) {
+      q.announced = true;
+      ui.toast(`✅ Quest complete — collect it in the shop's Quests tab`, 'gold');
+      sfx.buy();
+    }
+  }
+}
+
 let trophyClock = 0;
 function checkTrophies(dt) {
   trophyClock += dt;
@@ -1594,6 +1641,7 @@ function tick() {
   const boss = bugs.activeBoss;
   ui.setBoss(boss ? { name: boss.spec.name, hp: boss.hp, maxHp: boss.maxHp } : null);
   checkTrophies(dt);
+  checkQuests(dt);
   if (!padTestEl.classList.contains('hidden')) {
     padTestClock += dt;
     if (padTestClock > 0.08) { padTestClock = 0; renderPadTest(padTestEl, gamepad); }
@@ -1640,7 +1688,7 @@ function tick() {
     // First cycle grows from a sprout; regrowth keeps the established plant and
     // just fills the fruit back in.
     const floor = data.taken > 0 ? 0.82 : 0.28;
-    view.crop.scale.setScalar(floor + (1 - floor) * easeOut(g));
+    view.crop.scale.setScalar((floor + (1 - floor) * easeOut(g)) * mutationScale(done ? data.mut : null));
     animatePlant(view.crop, t, dt, done, g);
   }
   if (ripe !== ripeCount) { ripeCount = ripe; }
@@ -1651,15 +1699,19 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { build: BUILD_LABEL, sky, petPack, thieves, callPets, updateCarnivores, updateLure, petPower,
+window.game = { build: BUILD_LABEL, sky, petPack, thieves, callPets, refreshQuests, questDone, questProgress, claimQuest, updateCarnivores, updateLure, petPower,
                 buyDefence, placeDefence, buyProp, placeProp, syncProps, updateThieves,
                 growth, isRipe, feedProgress, cropValue, fmt, PLANTS_BY_ID, feedNearestPet, doGoldenHarvest, updateWeather, sellDevice, buyEgg, hatchEgg, buyUpgrade, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
                 placeSprinkler, buyWeapon, buyTurret, placeTurret, bugs, startRaid, fireWeapon,
                 waterPlot, refreshSprinklers, plotSpeed, state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
 
+sky.setWeather(state.weather, WX[state.weather]);
 restoreBugs();
 syncPets();
 syncProps();
+setHat(player.model, state.hat);
+setOutfit(player.model, state.outfit);
+refreshQuests();
 syncAllPlots();
 ui.refresh();
 document.getElementById('loading').remove();

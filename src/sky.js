@@ -121,18 +121,21 @@ export class Sky {
     this.dropPos[i * 3 + 2] = (Math.random() - 0.5) * 70;
   }
 
-  setWeather(id) { this.weather = id; }
+  /** @param spec the weather definition, for its moon and sky tints */
+  setWeather(id, spec = null) { this.weather = id; this.spec = spec; }
 
   /** @param player world position, so precipitation follows you around */
   update(dt, phase, player) {
     const c = blend(phase);
+    const spec = this.spec;
     const storm = this.weather === 'storm';
     const wet = storm || this.weather === 'rain';
     const snow = this.weather === 'frost';
 
     // Weather dims and greys the sky on top of the time of day.
     const gloom = storm ? 0.55 : wet ? 0.38 : snow ? 0.25 : 0;
-    const skyCol = c.sky.clone().lerp(new THREE.Color(storm ? 0x2b3038 : 0x9aa7b4), gloom);
+    let skyCol = c.sky.clone().lerp(new THREE.Color(storm ? 0x2b3038 : 0x9aa7b4), gloom);
+    if (spec?.sky) skyCol = skyCol.lerp(new THREE.Color(spec.sky), 0.75);   // aurora, blood moon
     this.scene.background = skyCol;
     this.scene.fog.color.copy(c.fog.clone().lerp(skyCol, 0.6));
     this.scene.fog.near = wet || snow ? 20 : 40;
@@ -150,12 +153,18 @@ export class Sky {
     this.sun.position.set(Math.cos(a) * 40, Math.sin(a) * 50 + 6, 22);
     this.sunDisc.position.set(Math.cos(a) * R, Math.sin(a) * R, 40);
     this.moonDisc.position.set(-Math.cos(a) * R, -Math.sin(a) * R, 40);
+    // A harvest, mega or blood moon hangs bigger and takes on its own colour.
+    const moonTint = spec?.moon;
+    this.moonDisc.material.color.setHex(moonTint || 0xf2f5ff);
+    this.moonDisc.scale.setScalar(moonTint ? 2.1 : 1);
+    if (moonTint) this.moonGlow.color.setHex(moonTint);
+    else this.moonGlow.color.setHex(0xbcd0ff);
     this.sunDisc.visible = this.sunDisc.position.y > -10;
     this.moonDisc.visible = this.moonDisc.position.y > -10;
 
     const night = isNight(phase) ? 1 : 0;
     this.moonGlow.position.copy(this.moonDisc.position).multiplyScalar(0.35).setY(30);
-    this.moonGlow.intensity = night * 220 * (1 - gloom * 0.6);
+    this.moonGlow.intensity = night * (moonTint ? 420 : 220) * (1 - gloom * 0.6);
     this.stars.material.opacity += ((night ? 0.9 : 0) - this.stars.material.opacity) * Math.min(1, dt * 1.5);
     this.stars.position.set(player.x, 0, player.z);
     this.stars.rotation.y += dt * 0.006;
@@ -195,6 +204,26 @@ export class Sky {
     const rw = this.weather === 'rainbow' ? 0.9 : 0;
     this.rainbow.material.opacity += (rw - this.rainbow.material.opacity) * Math.min(1, dt * 1.5);
     this.rainbow.visible = this.rainbow.material.opacity > 0.02;
+
+    // Aurora curtains.
+    if (!this.curtains) {
+      this.curtains = [];
+      for (let i = 0; i < 5; i++) {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(40, 26, 1, 1),
+          new THREE.MeshBasicMaterial({ color: [0x69f0ae, 0x40c4ff, 0xb388ff][i % 3],
+            transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }));
+        m.position.set((i - 2) * 26, 34, -70 - i * 8);
+        m.rotation.z = (i - 2) * 0.12;
+        this.curtains.push(m);
+        this.scene.add(m);
+      }
+    }
+    const auroraOn = this.weather === 'aurora' ? 0.34 : 0;
+    this.curtains.forEach((m, i) => {
+      m.material.opacity += (auroraOn - m.material.opacity) * Math.min(1, dt * 1.2);
+      m.visible = m.material.opacity > 0.01;
+      if (m.visible) m.position.y = 34 + Math.sin(performance.now() * 0.0004 + i) * 5;
+    });
 
     const meteorOn = this.weather === 'meteor';
     for (const mt of this.meteors) {
