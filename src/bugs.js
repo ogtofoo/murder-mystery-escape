@@ -108,6 +108,20 @@ export class BugSystem {
     return spawned;
   }
 
+  /**
+   * A single bug called in by a lure pet. It heads for a carnivore plot if
+   * there is one, so the plants get fed.
+   */
+  lureOne(level, preferred = []) {
+    const targets = preferred.length ? preferred : this.hooks.plantedPlots();
+    if (!targets.length) return null;
+    const spec = rollBug(level);
+    const a = Math.random() * Math.PI * 2;
+    const r = 8 + Math.random() * 3;                 // close enough to arrive quickly
+    return this.spawn(spec, Math.cos(a) * r, Math.sin(a) * r,
+                      targets[Math.floor(Math.random() * targets.length)]);
+  }
+
   /** One huge bug, worth a fortune, with a name the HUD can show. */
   spawnBoss(level) {
     const targets = this.hooks.plantedPlots();
@@ -221,11 +235,11 @@ export class BugSystem {
     return best;
   }
 
-  damage(bug, amount) {
+  damage(bug, amount, opts = {}) {
     bug.hp -= amount;
     bug.mesh.userData.body.material.emissive?.setHex(0x882222);
     setTimeout(() => bug.mesh.userData.body.material.emissive?.setHex(0x000000), 70);
-    if (bug.hp <= 0) { this.kill(bug); return true; }
+    if (bug.hp <= 0) { this.kill(bug, opts); return true; }
     return false;
   }
 

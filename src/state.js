@@ -126,6 +126,7 @@ function sanitize(raw) {
     if (Array.isArray(p.bugs)) out.bugs = p.bugs.filter(id => BUGS_BY_ID[id]).slice(0, 12);
     // A carnivore remembers how much it has eaten, and of what.
     if (Number.isFinite(p.fed)) out.fed = Math.max(0, Math.floor(p.fed));
+    if (Number.isFinite(p.php)) out.php = Math.max(0, p.php);
     if (p.diet && typeof p.diet === 'object') {
       out.diet = {};
       for (const [id, n] of Object.entries(p.diet)) {

@@ -145,10 +145,20 @@ in the game and the only ones that will not ripen on a timer.
 | Bog Gulper | ₪133Qa | 30 bugs | 4.5m | ₪600Qa × diet |
 | World Devourer | ₪1.06Qi | 50 bugs | 6.0m | ₪5Qi × diet |
 
-**They hunt for themselves.** Any bug that wanders within reach gets snapped up — the jaws
-slam shut, the bug is gone. A carnivore ripens only when *both* its timer has run out **and**
-it has eaten its fill, so it matures slowly and needs raids to come to it. Eaten bugs pay no
-bounty; the plant gets the meal instead.
+**They have to fight for it.** A bug in reach gets chewed on — and bites back. Small prey goes
+down in a moment, but big bugs are genuinely dangerous, and a plant that runs out of health is
+torn apart and lost. Between fights a carnivore knits itself back together at 3% a second.
+
+| | Locust | Titan Weevil | MEGA Locust | MEGA Titan Weevil |
+| --- | --- | --- | --- | --- |
+| Venus Snaptrap | wins | **loses** | **loses** | **loses** |
+| Pitcher Beast | wins | **loses** | wins | **loses** |
+| Bog Gulper | wins | wins | wins | **loses** |
+| World Devourer | wins | wins | wins | **wins** |
+
+Only a **World Devourer** can chew through a MEGA bug — everything below it gets eaten trying.
+A carnivore ripens only when *both* its timer has run out **and** it has eaten its fill. Eaten
+bugs pay no bounty; the plant gets the meal instead.
 
 **Their fruit looks like what they ate.** Little bug-shaped pods grow on the plant in the
 colour of its main prey — green aphid pods, gold locust pods, pink Titan Weevil pods — and the
@@ -157,6 +167,12 @@ Each picking empties its stomach, so it has to hunt again for the next one.
 
 This turns bug raids from a nuisance into a harvest. Plant a Devourer, stop shooting, and let
 them come.
+
+**Don't wait for a raid — get a Baby Drake.** A drake roars bugs in constantly, and sends them
+straight at whichever carnivore is still hungry. One level-1 drake calls a bug every 40 seconds;
+a level-25 drake calls one every 1.6 seconds. **There is no cap** — every extra drake and every
+level adds to the rate, so five grown drakes bring over three bugs a second and a pack of twelve
+brings seven. Without a carnivore planted they just eat your crops, so pair them up.
 
 ### 🌦️ Day, night and weather
 
@@ -209,7 +225,7 @@ Pets level up just by being out, and every level makes their ability stronger.
 | Barn Cat | Rare | Crop value |
 | Fox | Legendary | Auto-picks, wider |
 | Wise Owl | Mythic | Mutation luck ++ |
-| Baby Drake | Prismatic | Growth speed +++ |
+| Baby Drake | Prismatic | **Roars bugs in** — feeds your carnivores |
 | Phoenix Chick | Transcendent | Crop value +++ |
 | Star Sprite | SUPER | Mutation luck ×5.5 per level |
 

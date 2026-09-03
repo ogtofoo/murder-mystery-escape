@@ -44,6 +44,7 @@ export const sfx = {
     const base = 520 + tier * 60;
     [1, 1.25, 1.5].forEach((k, i) => beep(base * k, 0.12, 'triangle', 0.05, i * 0.07));
   },
+  roar() { beep(180, 0.28, 'sawtooth', 0.05); beep(120, 0.34, 'triangle', 0.045, 0.08); beep(240, 0.2, 'square', 0.03, 0.16); },
   chomp() { beep(150, 0.09, 'square', 0.06); beep(90, 0.14, 'sawtooth', 0.05, 0.05); },
   dig() { beep(120, 0.18, 'sawtooth', 0.06); beep(90, 0.22, 'triangle', 0.05, 0.08); },
   harvest(tier = 0) {

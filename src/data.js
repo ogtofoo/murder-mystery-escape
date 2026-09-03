@@ -49,10 +49,10 @@ export const PLANTS = [
   { id:'infinitygourd',name:'Infinity Gourd',tier:'super', kind:'gourd', cost:2.2e13,grow:380, sell:1.3e14, colors:[0xfff59d,0xff8a80] },
   { id:'superfruit', name:'SUPERFRUIT',  tier:'super', kind:'star',  cost:1e14, grow:420, sell:6.5e14, harvests:8, colors:[0xffffff,0xffd54f] },
   // ---- Carnivore: these do not ripen on time alone. They have to eat. ----
-  { id:'snaptrap',  name:'Venus Snaptrap', tier:'carnivore', kind:'trap',    cost:8e14, grow:520, sell:9e15,  harvests:5, eats:10, reach:3.2, colors:[0xff1744,0x2e7d32] },
-  { id:'pitcher',   name:'Pitcher Beast',  tier:'carnivore', kind:'pitcher', cost:6e15, grow:640, sell:7e16,  harvests:5, eats:18, reach:3.8, colors:[0xab47bc,0x4caf50] },
-  { id:'gulper',    name:'Bog Gulper',     tier:'carnivore', kind:'maw',     cost:5e16, grow:780, sell:6e17,  harvests:4, eats:30, reach:4.5, colors:[0xd50000,0x1b5e20] },
-  { id:'devourer',  name:'World Devourer', tier:'carnivore', kind:'maw',     cost:4e17, grow:900, sell:5e18,  harvests:4, eats:50, reach:6.0, colors:[0x212121,0xff1744] },
+  { id:'snaptrap',  name:'Venus Snaptrap', tier:'carnivore', kind:'trap',    cost:8e14, grow:520, sell:9e15,  harvests:5, eats:10, reach:3.2, hp:6e3,  bite:500,    colors:[0xff1744,0x2e7d32] },
+  { id:'pitcher',   name:'Pitcher Beast',  tier:'carnivore', kind:'pitcher', cost:6e15, grow:640, sell:7e16,  harvests:5, eats:18, reach:3.8, hp:6e4,  bite:4000,   colors:[0xab47bc,0x4caf50] },
+  { id:'gulper',    name:'Bog Gulper',     tier:'carnivore', kind:'maw',     cost:5e16, grow:780, sell:6e17,  harvests:4, eats:30, reach:4.5, hp:6e5,  bite:40000,  colors:[0xd50000,0x1b5e20] },
+  { id:'devourer',  name:'World Devourer', tier:'carnivore', kind:'maw',     cost:4e17, grow:900, sell:5e18,  harvests:4, eats:50, reach:6.0, hp:2e7,  bite:900000, colors:[0x212121,0xff1744] },
 ];
 
 /**
@@ -144,6 +144,18 @@ export const BUGS_BY_ID = Object.fromEntries(BUGS.map(b => [b.id, b]));
 
 /** Each bug on a plot drags its growth down by this much. */
 export const BUG_SLOW = 0.75;
+
+/**
+ * Bugs bite back. A bug in a carnivore's jaws deals this fraction of its own
+ * health per second to the plant, so the big ones are genuinely dangerous:
+ * a Venus Snaptrap loses to a Titan Weevil, and only a World Devourer can
+ * chew through a MEGA bug.
+ */
+export const BUG_BITE = 0.012;
+export function bugBite(spec) { return spec.hp * BUG_BITE; }
+
+/** Carnivores knit themselves back together between fights. */
+export const PLANT_REGEN_PER_SEC = 0.03;
 
 /** Weapons: swung or fired at bugs by hand. */
 export const WEAPONS = [
@@ -241,7 +253,7 @@ export const PETS = [
   { id:'cat',     name:'Barn Cat',     tier:'rare',         ability:'value',   power:0.06, shape:'cat',    colors:[0xff9800, 0xfff3e0] },
   { id:'fox',     name:'Fox',          tier:'legendary',    ability:'harvest', power:8,    shape:'cat',    colors:[0xf4511e, 0xffffff] },
   { id:'owl',     name:'Wise Owl',     tier:'mythic',       ability:'luck',    power:1.8,  shape:'owl',    colors:[0x8d6e63, 0xffe082] },
-  { id:'drake',   name:'Baby Drake',   tier:'prismatic',    ability:'growth',  power:0.22, shape:'drake',  colors:[0x7c4dff, 0x69f0ae] },
+  { id:'drake',   name:'Baby Drake',   tier:'prismatic',    ability:'lure',    power:1,    shape:'drake',  colors:[0x7c4dff, 0x69f0ae] },
   { id:'phoenix', name:'Phoenix Chick',tier:'transcendent', ability:'value',   power:0.3,  shape:'drake',  colors:[0xff6d00, 0xffd54f] },
   { id:'sprite',  name:'Star Sprite',  tier:'super',        ability:'luck',    power:4.5,  shape:'sprite', colors:[0xffffff, 0xffe082] },
 ];
@@ -253,7 +265,21 @@ export const ABILITY_TEXT = {
   luck:   (p, lv) => `×${(1 + p.power * lv).toFixed(1)} mutation luck`,
   harvest:(p, lv) => `auto-picks ripe crops within ${(p.power + lv * 0.4).toFixed(1)}m`,
   pest:   (p, lv) => `${Math.round(p.power * lv * 12)} damage/s to nearby bugs`,
+  lure:   (p, lv) => `${lureText(p.power * lv)} — feeds carnivores`,
 };
+
+/**
+ * Bugs per second a lure calls in. Every drake and every level adds to it with
+ * no ceiling, so a pack of grown drakes brings a swarm.
+ */
+export function lureRate(power) { return Math.max(0, power) / 40; }
+
+export function lureText(power) {
+  const rate = lureRate(power);
+  if (rate <= 0) return 'calls no bugs';
+  return rate >= 1 ? `roars up ${rate.toFixed(1)} bugs a second`
+                   : `roars up a bug every ${(1 / rate).toFixed(1)}s`;
+}
 
 /** Eggs: pricier eggs hold better odds. */
 export const EGGS = [

@@ -5,8 +5,8 @@ import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollPack, plotCost, PLOT_COUNT, refund
          CANS_BY_ID, SPRINKLERS_BY_ID, TURRETS_BY_ID, WEAPONS_BY_ID, plotLayout,
          raidLevel, BUG_SLOW, TROPHIES, goldenMultiplier, WEATHERS, rollWeather, rollMutation,
          mutationMultiplier, mutationName, mutationColor,
-         PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS_BY_ID, rollPet, moodOf, TREAT_VALUE,
-         UPGRADES_BY_ID, upgradeCost, dietSummary, dietBonus } from './data.js';
+         PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS_BY_ID, rollPet, moodOf, TREAT_VALUE, lureRate,
+         UPGRADES_BY_ID, upgradeCost, dietSummary, dietBonus, bugBite, PLANT_REGEN_PER_SEC } from './data.js';
 import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount,
          growth, isRipe, isRegrowing, harvestsLeft, cycleSeconds,
          refreshSprinklers, plotSpeed, sprinklerSpeed, sprinklerAt, stockCount, addSprinkler, takeSprinkler,
@@ -285,7 +285,9 @@ function plant(index) {
   if (!id || seedCount(id) <= 0) { ui.toast('No seed selected. Buy one in the shop (B).', 'bad'); sfx.deny(); return; }
   if (state.plots[index]) return;
   takeSeed(id);
-  state.plots[index] = { plantId: id, plantedAt: Date.now(), taken: 0, watered: false, mut: undefined, fed: 0, diet: {} };
+  const spec = PLANTS_BY_ID[id];
+  state.plots[index] = { plantId: id, plantedAt: Date.now(), taken: 0, watered: false, mut: undefined,
+                         fed: 0, diet: {}, php: spec.carnivore ? spec.hp : undefined };
   syncPlot(index);
   const planted = PLANTS_BY_ID[id];
   ui.toast(`Planted ${planted.name}${planted.harvests > 1 ? ` — good for ${planted.harvests} harvests` : ''}`);
@@ -608,6 +610,51 @@ function hatchEgg(index) {
   save();
 }
 
+/**
+ * Drakes roar bugs in, so carnivores never wait on a raid. The rate has no
+ * ceiling — more drakes and higher levels simply call more, and a fractional
+ * credit carries over so even slow lures fire on schedule.
+ */
+const BUG_LIMIT = 180;          // keeps a huge drake pack from drowning the frame rate
+let lureCredit = 0;
+let luredTotal = 0;
+
+function updateLure(dt) {
+  const power = petPower('lure');
+  if (power <= 0) { lureCredit = 0; return; }
+
+  lureCredit += lureRate(power) * dt;
+  if (lureCredit < 1) return;
+
+  // Send them at a hungry carnivore if one is planted — that is the point.
+  const hungry = state.plots
+    .map((p, i) => (p && PLANTS_BY_ID[p.plantId]?.carnivore && feedProgress(p) < 1 ? i : -1))
+    .filter(i => i >= 0);
+
+  let called = 0;
+  const batch = Math.min(6, Math.floor(lureCredit));   // spread a big surge over frames
+  for (let i = 0; i < batch; i++) {
+    if (bugs.count >= BUG_LIMIT) { lureCredit = 0; break; }
+    const bug = bugs.lureOne(raidLevel(state.owned, state.discovered), hungry);
+    if (!bug) { lureCredit = 0; return; }
+    lureCredit -= 1;
+    called++;
+    luredTotal++;
+    if (luredTotal === 1) {
+      ui.toast(`🐉 Your drake roars — bugs come running${hungry.length ? ' straight at your carnivores' : ''}`);
+    }
+  }
+  if (!called) return;
+
+  // A puff of dragon-breath from whichever drake did the calling.
+  const drake = petPack.pets.find(p => p.spec.ability === 'lure');
+  if (drake) {
+    burst({ x: drake.mesh.position.x, z: drake.mesh.position.z }, 0x69f0ae);
+    drake.hop = 0.8;
+  }
+  sfx.roar();
+}
+
 /** Eggs tick down; pets earn experience just by being out. */
 let petClock = 0;
 function updatePets(dt, t) {
@@ -617,6 +664,7 @@ function updatePets(dt, t) {
   const happiness = {};
   for (const p of state.pets) happiness[p.uid] = p.happy || 0;
   petPack.update(dt, t, player.pos, player.yaw, performance.now() < petCallUntil, happiness);
+  updateLure(dt);
 
   petClock += dt;
   if (petClock < 1) return;
@@ -753,7 +801,12 @@ function updateRaids() {
   if (Date.now() >= state.nextRaid) startRaid();
 }
 
-/** Carnivore plants grab any bug that strays within reach and swallow it. */
+/**
+ * Carnivores fight for their food. The plant chews on whatever is in reach
+ * while every bug in reach bites back — small prey is swallowed in a moment,
+ * but a MEGA bug will tear a young plant apart. Only the biggest carnivores
+ * can win those.
+ */
 function updateCarnivores(dt) {
   for (let i = 0; i < PLOT_COUNT; i++) {
     const plot = state.plots[i];
@@ -762,24 +815,89 @@ function updateCarnivores(dt) {
     const view = world.plots[i];
     if (!view.crop) continue;
 
-    view.crop.userData.snap = Math.max(0, (view.crop.userData.snap || 0) - dt * 3);
-    if (feedProgress(plot) >= 1) continue;              // full for this cycle
+    if (!Number.isFinite(plot.php)) plot.php = plant.hp;
+    const inReach = bugs.near(view.x, view.z, plant.reach);
+    view.crop.userData.snap = Math.max(0, (view.crop.userData.snap || 0) - dt * 2.2);
 
-    for (const bug of bugs.near(view.x, view.z, plant.reach)) {
-      feedCarnivore(i, bug.spec.id);
-      // The bug is eaten outright — no bounty, but the plant gets its meal.
-      bugs.kill(bug, { silent: true });
-      view.crop.userData.snap = 1;
-      burst(view, 0xff1744);
+    if (!inReach.length) {
+      plot.php = Math.min(plant.hp, plot.php + plant.hp * PLANT_REGEN_PER_SEC * dt);
+      updatePlantBar(view, plot.php, plant.hp);
+      continue;
+    }
+
+    // The plant works on the nearest bug; a full plant still defends itself.
+    const full = feedProgress(plot) >= 1;
+    let prey = inReach[0], best = Infinity;
+    for (const b of inReach) {
+      const d = Math.hypot(b.mesh.position.x - view.x, b.mesh.position.z - view.z);
+      if (d < best) { best = d; prey = b; }
+    }
+    view.crop.userData.snap = 0.55 + Math.abs(Math.sin(performance.now() * 0.012)) * 0.45;
+
+    if (bugs.damage(prey, plant.bite * dt, { silent: true })) {
+      if (!full) {
+        feedCarnivore(i, prey.spec.id);
+        if (feedProgress(plot) >= 1) {
+          ui.toast(`🪤 <b>${plant.name}</b> has eaten its fill — it can ripen now`, 'gold');
+          gamepad.rumble(0.4, 160);
+        }
+      }
+      burst(view, prey.spec.boss ? 0xffd54f : 0xff1744);
       sfx.chomp();
-      if (feedProgress(plot) >= 1) {
-        ui.toast(`🪤 <b>${plant.name}</b> has eaten its fill — it can ripen now`, 'gold');
-        gamepad.rumble(0.4, 160);
+      if (prey.spec.boss) {
+        ui.toast(`🪤 <b>${plant.name}</b> swallowed the <b>${prey.spec.name}</b>!`, 'gold');
+        gamepad.rumble(0.9, 500);
       }
       save();
-      break;                                            // one bite per frame, so you can watch
     }
+
+    // Everything in its jaws bites back.
+    let incoming = 0;
+    for (const b of inReach) incoming += bugBite(b.spec);
+    plot.php -= incoming * dt;
+
+    if (plot.php <= 0) {
+      const killer = inReach.find(b => b.spec.boss) || prey;
+      state.plots[i] = null;
+      syncPlot(i);
+      if (view.hpbar) view.hpbar.visible = false;
+      for (let k = 0; k < 4; k++) burst(view, 0x8a1c1c);
+      ui.toast(`💀 A <b>${killer.spec.name}</b> tore apart your <b>${plant.name}</b>!`, 'bad');
+      sfx.deny();
+      gamepad.rumble(0.9, 600);
+      save();
+      continue;
+    }
+    updatePlantBar(view, plot.php, plant.hp);
   }
+}
+
+/** A health bar over a carnivore that is hurt, facing the camera. */
+function updatePlantBar(view, hp, max) {
+  if (hp >= max - 0.01) {
+    if (view.hpbar) view.hpbar.visible = false;
+    return;
+  }
+  if (!view.hpbar) {
+    const g = new THREE.Group();
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.17),
+      new THREE.MeshBasicMaterial({ color: 0x1a1a1a, transparent: true, opacity: 0.75, depthTest: false }));
+    const fill = new THREE.Mesh(new THREE.PlaneGeometry(1.46, 0.13),
+      new THREE.MeshBasicMaterial({ color: 0x69f0ae, depthTest: false }));
+    fill.position.z = 0.001;
+    g.add(back, fill);
+    g.userData.fill = fill;
+    g.position.set(view.x, 2.1, view.z);
+    g.renderOrder = 998;
+    scene.add(g);
+    view.hpbar = g;
+  }
+  const k = Math.max(0, hp / max);
+  view.hpbar.visible = true;
+  view.hpbar.userData.fill.scale.x = k;
+  view.hpbar.userData.fill.position.x = -0.73 * (1 - k);
+  view.hpbar.userData.fill.material.color.setHex(k > 0.5 ? 0x69f0ae : k > 0.2 ? 0xffca28 : 0xff5252);
+  view.hpbar.quaternion.copy(camera.quaternion);
 }
 
 // ---------------------------------------------------------------- combat
@@ -965,8 +1083,10 @@ function updatePrompt() {
     } else if (p.carnivore && feedProgress(plot) < 1) {
       const d = dietSummary(plot.diet);
       const eaten = plot.fed || 0;
+      const hurt = Number.isFinite(plot.php) && plot.php < p.hp
+        ? ` · <span style="color:#ff8a80">❤ ${fmt(Math.ceil(plot.php))}/${fmt(p.hp)}</span>` : '';
       ui.setPrompt(`${p.name} — <span style="color:#ff6b6b">hungry</span>
-        <span class="sub">🪤 eaten ${eaten}/${p.eats} bugs${d ? ` · mostly ${d.main.name}s · fruit worth ×${dietBonus(plot.diet).toFixed(2)}` : ' · lure a raid to it'}</span>`);
+        <span class="sub">🪤 eaten ${eaten}/${p.eats} bugs${d ? ` · mostly ${d.main.name}s · fruit ×${dietBonus(plot.diet).toFixed(2)}` : ' · send bugs at it'}${hurt}</span>`);
     } else {
       const wait = Math.ceil(cycleSeconds(plot, i) * (1 - growth(plot, i)));
       const verb = isRegrowing(plot) ? 'regrowing' : 'grown';
@@ -1317,7 +1437,7 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { build: BUILD_LABEL, sky, petPack, callPets, updateCarnivores,
+window.game = { build: BUILD_LABEL, sky, petPack, callPets, updateCarnivores, updateLure, petPower,
                 growth, isRipe, feedProgress, cropValue, fmt, PLANTS_BY_ID, feedNearestPet, doGoldenHarvest, updateWeather, sellDevice, buyEgg, hatchEgg, buyUpgrade, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
                 placeSprinkler, buyWeapon, buyTurret, placeTurret, bugs, startRaid, fireWeapon,
                 waterPlot, refreshSprinklers, plotSpeed, state, world, player, ui, gamepad, camera, scene, save, syncAllPlots, buySeed, buyPack, buyPlot, plant, harvest, interact };
