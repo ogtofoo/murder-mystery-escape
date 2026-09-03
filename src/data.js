@@ -562,6 +562,44 @@ export function mutationColor(mut) {
 /** How much bigger a MEGA crop grows. */
 export function mutationScale(mut) { return mut?.mega ? 2.3 : 1; }
 
+// ---- Seed shop stock ---------------------------------------------------
+
+/**
+ * The seed shop restocks on a timer, and the rarer a seed the less likely it
+ * is on the shelf. After dark the night market opens: the rarest tiers are
+ * always in, and everything else is far more likely to be.
+ */
+export const RESTOCK_SECONDS = 300;
+export const NIGHT_GUARANTEED_ORDER = 7;      // SUPER and CARNIVORE never miss a night
+
+/** Chance a seed of each tier is stocked by day, and how many of it. */
+export const STOCK_BY_TIER = {
+  common:       { chance: 1.00, qty: [8, 16] },
+  uncommon:     { chance: 0.85, qty: [4, 9] },
+  rare:         { chance: 0.62, qty: [2, 5] },
+  legendary:    { chance: 0.42, qty: [1, 3] },
+  mythic:       { chance: 0.28, qty: [1, 2] },
+  prismatic:    { chance: 0.17, qty: [1, 2] },
+  transcendent: { chance: 0.10, qty: [1, 1] },
+  super:        { chance: 0.05, qty: [1, 1] },
+  carnivore:    { chance: 0.03, qty: [1, 1] },
+};
+
+/** Roll tonight's (or today's) shelf for every seed you have discovered. */
+export function rollStock(discovered, night) {
+  const shelf = {};
+  for (const p of PLANTS) {
+    if (!discovered[p.id]) continue;
+    const rule = STOCK_BY_TIER[p.tier] || STOCK_BY_TIER.common;
+    const guaranteed = night && TIERS[p.tier].order >= NIGHT_GUARANTEED_ORDER;
+    const chance = guaranteed ? 1 : Math.min(1, rule.chance * (night ? 1.7 : 1));
+    if (p.id !== 'carrot' && Math.random() > chance) continue;   // the carrot is never out
+    const [lo, hi] = rule.qty;
+    shelf[p.id] = lo + Math.floor(Math.random() * (hi - lo + 1)) + (guaranteed ? 1 : 0);
+  }
+  return shelf;
+}
+
 // ---- Golden Harvest (prestige) ----------------------------------------
 
 /** Each Golden Seed adds this much to every crop's sale value, forever. */

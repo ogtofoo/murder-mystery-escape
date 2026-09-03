@@ -370,6 +370,16 @@ tier drops out of the draw once all its plants are taken, so its weight passes t
 still in play and the advertised odds hold. Cards are revealed lowest tier first, and anything
 new to your almanac gets a NEW badge.
 
+### 🛒 Stock and the night market
+
+The seed shop **restocks every five minutes**, and the rarer a seed, the less likely it is to be
+on the shelf when it does: commons are always in, rares about six times in ten, legendaries four,
+transcendents one in ten and SUPER or CARNIVORE seeds almost never — by day. **After dark the
+night market opens**: the shelf turns over the moment night falls, SUPER and CARNIVORE seeds are
+**guaranteed in stock every night**, and every other tier is far more likely to be too. The
+Seeds tab shows a live restock countdown and how many of each seed are left. The carrot is never
+out of stock, and a seed you've just found in a pack goes straight on the shelf.
+
 Common seeds are always on the shelf. Everything from Rare up has to be pulled out of a seed
 pack first; once a species is discovered it stays in the shop (and the almanac) so you can buy
 it directly. Prismatic and above hue-cycle and glow in the world.

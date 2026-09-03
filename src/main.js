@@ -16,7 +16,8 @@ import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spen
          equippedPets, petPower, petHarvestRange, luckMultiplier, upgradeLevel, nextUpgradeCost, rank,
          feedPet, decayHappiness, feedProgress, feedCarnivore,
          defenceAt, defenceCover, stealable,
-         refreshQuests, questProgress, questDone, claimQuest } from './state.js';
+         refreshQuests, questProgress, questDone, claimQuest,
+         refreshShelf, shelfCount, takeFromShelf } from './state.js';
 import { buildWorld } from './world.js';
 import { buildPlant, animatePlant, applyMutation, setCarnivoreFruit } from './plants.js';
 import { setHat, setOutfit } from './gardener.js';
@@ -163,7 +164,9 @@ function downloadSave() {
 function buySeed(id) {
   const p = PLANTS_BY_ID[id];
   if (!p) return;
+  if (shelfCount(id) <= 0) { ui.toast(`${p.name} seeds are sold out — check back after the restock.`, 'bad'); sfx.deny(); return; }
   if (!spend(p.cost)) { ui.toast('Not enough sheckles.', 'bad'); sfx.deny(); return; }
+  takeFromShelf(id);
   addSeed(id, 1);
   ui.select(id);
   ui.toast(`Bought a ${p.name} seed for ₪${fmt(p.cost)}`);
@@ -1545,6 +1548,25 @@ function doGoldenHarvest() {
   save();
 }
 
+/** The shop shelf turns over on a timer, and again the moment night falls. */
+let shelfClock = 0;
+function checkShelf(dt) {
+  shelfClock += dt;
+  if (shelfClock < 1) return;
+  shelfClock = 0;
+  const night = isNight();
+  const first = !state.shelfUntil;
+  if (!refreshShelf(night)) return;
+  if (!first) {
+    ui.toast(night
+      ? `🌙 <b>Night market open</b> — the rarest seeds are on the shelf`
+      : `🛒 <b>Seed shop restocked</b>`, 'gold');
+    sfx.weather();
+  }
+  ui.refresh();
+  save();
+}
+
 let questClock = 0;
 function checkQuests(dt) {
   questClock += dt;
@@ -1642,6 +1664,8 @@ function tick() {
   ui.setBoss(boss ? { name: boss.spec.name, hp: boss.hp, maxHp: boss.maxHp } : null);
   checkTrophies(dt);
   checkQuests(dt);
+  checkShelf(dt);
+  ui.tickShop();
   if (!padTestEl.classList.contains('hidden')) {
     padTestClock += dt;
     if (padTestClock > 0.08) { padTestClock = 0; renderPadTest(padTestEl, gamepad); }
@@ -1699,7 +1723,7 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { build: BUILD_LABEL, sky, petPack, thieves, callPets, refreshQuests, questDone, questProgress, claimQuest, updateCarnivores, updateLure, petPower,
+window.game = { build: BUILD_LABEL, sky, petPack, thieves, callPets, refreshQuests, refreshShelf, shelfCount, isNight, questDone, questProgress, claimQuest, updateCarnivores, updateLure, petPower,
                 buyDefence, placeDefence, buyProp, placeProp, syncProps, updateThieves,
                 growth, isRipe, feedProgress, cropValue, fmt, PLANTS_BY_ID, feedNearestPet, doGoldenHarvest, updateWeather, sellDevice, buyEgg, hatchEgg, buyUpgrade, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
                 placeSprinkler, buyWeapon, buyTurret, placeTurret, bugs, startRaid, fireWeapon,
@@ -1712,6 +1736,7 @@ syncProps();
 setHat(player.model, state.hat);
 setOutfit(player.model, state.outfit);
 refreshQuests();
+refreshShelf(isNight(), !state.shelfUntil);
 syncAllPlots();
 ui.refresh();
 document.getElementById('loading').remove();

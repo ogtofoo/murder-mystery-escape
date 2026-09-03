@@ -8,7 +8,8 @@ import { PLOT_COUNT, PLANTS_BY_ID, plotCost, plotLayout, LAYOUT_ID,
          TREAT_VALUE, HAPPY_MAX, HAPPY_DECAY_PER_MIN, happyBonus,
          UPGRADES, UPGRADES_BY_ID, upgradeCost, rankFor, dietBonus, dietSummary,
          DEFENCES_BY_ID, PROPS_BY_ID, HATS_BY_ID, OUTFITS_BY_ID,
-         QUEST_BY_ID, today, rollQuests, questReward } from './data.js';
+         QUEST_BY_ID, today, rollQuests, questReward,
+         rollStock, RESTOCK_SECONDS } from './data.js';
 
 const SAVE_KEY = 'sheckle-garden-save-v1';
 export const SAVE_VERSION = 2;
@@ -36,6 +37,9 @@ function freshState() {
     defences: new Array(PLOT_COUNT).fill(null),  // scarecrows, traps and lamps on plots
     props: [],                                   // decorations dotted around the garden
     quests: { day: '', list: [], streak: 0 },
+    shelf: {},          // seed id -> how many the shop has on the shelf right now
+    shelfUntil: 0,      // when the next restock is due
+    shelfNight: false,  // whether the current shelf was stocked after dark
     hat: 'straw', outfit: 'green',
     hats: { straw: true }, outfits: { green: true },
     weather: 'clear',
@@ -104,6 +108,13 @@ function sanitize(raw) {
   for (const id of Object.keys(raw.outfits || {})) if (OUTFITS_BY_ID[id]) s.outfits[id] = true;
   s.hat = s.hats[raw.hat] ? raw.hat : 'straw';
   s.outfit = s.outfits[raw.outfit] ? raw.outfit : 'green';
+
+  s.shelf = {};
+  for (const [id, n] of Object.entries(raw.shelf || {})) {
+    if (PLANTS_BY_ID[id] && Number.isFinite(n) && n > 0) s.shelf[id] = Math.floor(n);
+  }
+  s.shelfUntil = Number.isFinite(raw.shelfUntil) ? raw.shelfUntil : 0;
+  s.shelfNight = !!raw.shelfNight;
 
   const q = raw.quests;
   s.quests = {
@@ -244,7 +255,7 @@ export function seedCount(id) { return state.seeds[id] || 0; }
 
 export function addSeed(id, n = 1) {
   state.seeds[id] = seedCount(id) + n;
-  state.discovered[id] = true;
+  if (!state.discovered[id]) { state.discovered[id] = true; stockDiscovery(id); }
 }
 
 export function takeSeed(id) {
@@ -320,6 +331,38 @@ export function luckMultiplier() {
 }
 
 export function rank() { return rankFor(state.stats.earned); }
+
+// ---- seed shop stock --------------------------------------------------
+
+export function shelfCount(id) { return state.shelf[id] || 0; }
+
+/**
+ * Restock if the timer has run out, or if night has just fallen or lifted
+ * (so the night market opens the moment it gets dark). Returns true when the
+ * shelf changed.
+ */
+export function refreshShelf(night, force = false) {
+  const now = Date.now();
+  const due = now >= state.shelfUntil;
+  const flipped = night !== state.shelfNight && state.shelfUntil > 0;
+  if (!force && !due && !flipped) return false;
+  state.shelf = rollStock(state.discovered, night);
+  state.shelfUntil = now + RESTOCK_SECONDS * 1000;
+  state.shelfNight = night;
+  return true;
+}
+
+/** A newly discovered seed goes straight on the shelf so it can be bought at once. */
+export function stockDiscovery(id) {
+  if (PLANTS_BY_ID[id] && !state.shelf[id]) state.shelf[id] = 1;
+}
+
+export function takeFromShelf(id) {
+  if (shelfCount(id) <= 0) return false;
+  state.shelf[id] -= 1;
+  if (state.shelf[id] <= 0) delete state.shelf[id];
+  return true;
+}
 
 // ---- daily quests -----------------------------------------------------
 

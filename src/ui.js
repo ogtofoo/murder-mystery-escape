@@ -11,7 +11,7 @@ import { PLANTS, PLANTS_BY_ID, PACKS, TIERS, TIER_ORDER, PLOT_COUNT, fmt, refund
          UPGRADES, upgradeCost, rankFor, nextRank } from './data.js';
 import { state, seedCount, stockCount, goldenPending, canGoldenHarvest, trophyProgress, cropValue,
          upgradeLevel, nextUpgradeCost, equippedPets, luckMultiplier,
-         questProgress, questDone } from './state.js';
+         questProgress, questDone, shelfCount } from './state.js';
 
 const $ = sel => document.querySelector(sel);
 
@@ -174,6 +174,16 @@ export class UI {
     this.el.packmodal.classList.remove('hidden');
   }
 
+  /** Keep the restock countdown live while the Seeds tab is showing. */
+  tickShop() {
+    if (!this.shopOpen || this.tab !== 'seeds') return;
+    const el = this.el.body.querySelector('#restockleft');
+    if (!el) return;
+    const left = Math.max(0, Math.ceil((state.shelfUntil - Date.now()) / 1000));
+    const txt = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+    if (el.textContent !== txt) el.textContent = txt;
+  }
+
   setBugCount(n, thieves = 0) {
     const key = n + ':' + thieves;
     if (key === this.bugCount) return;
@@ -313,28 +323,33 @@ export class UI {
   closePack() { this.el.packmodal.classList.add('hidden'); }
 
   renderSeeds() {
-    let html = '';
+    const left = Math.max(0, Math.ceil((state.shelfUntil - Date.now()) / 1000));
+    const mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, '0');
+    let html = state.shelfNight
+      ? `<div class="tierhead" style="color:#a8d8ff">🌙 Night market — SUPER and CARNIVORE seeds are always in after dark · restocks in <span id="restockleft">${mm}:${ss}</span></div>`
+      : `<div class="tierhead">🛒 Restocks in <span id="restockleft">${mm}:${ss}</span> · rarer seeds sell out more often · the rarest are always in stock at night</div>`;
     for (const tier of TIER_ORDER) {
       const list = PLANTS.filter(p => p.tier === tier && state.discovered[p.id]);
       if (!list.length) continue;
       html += `<div class="tierhead" style="color:${TIERS[tier].css}">${TIERS[tier].name}</div>`;
       for (const p of list) {
-        const can = state.money >= p.cost;
+        const stock = shelfCount(p.id);
+        const can = state.money >= p.cost && stock > 0;
         const have = seedCount(p.id);
-        html += `<div class="row">
+        html += `<div class="row ${stock ? '' : 'soldout'}">
           <div class="stripe" style="background:${TIERS[tier].css}"></div>
           <div>
             <div class="name">${p.name}</div>
             <div class="meta">${harvestLine(p)}</div>
           </div>
-          <div class="own">owned<br><b>${have}</b></div>
+          <div class="own">owned<br><b>${have}</b><br><span class="${stock ? 'instock' : 'nostock'}">${stock ? `${stock} in stock` : 'sold out'}</span></div>
           <div class="sellcol">
             <button class="buy sell" data-sell="${p.id}" ${have ? '' : 'disabled'}
               title="Sell one back at ${Math.round(SEED_REFUND * 100)}%">sell ₪${fmt(refundValue(p))}</button>
             ${have > 1 ? `<button class="buy sell all" data-sell="${p.id}" data-all="1"
               title="Sell all ${have}">all ×${have}</button>` : ''}
           </div>
-          <button class="buy" data-seed="${p.id}" ${can ? '' : 'disabled'}>₪ ${fmt(p.cost)}</button>
+          <button class="buy" data-seed="${p.id}" ${can ? '' : 'disabled'}>${stock ? `₪ ${fmt(p.cost)}` : 'sold out'}</button>
         </div>`;
       }
     }

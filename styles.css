@@ -216,6 +216,9 @@ kbd {
 .row .name { font-size: 16px; font-weight: 600; }
 .row .meta { font-size: 12px; opacity: 0.68; margin-top: 2px; }
 .row .own { font-size: 13px; opacity: 0.8; text-align: right; }
+.row.soldout { opacity: 0.6; }
+.row .instock { font-size: 11px; color: var(--good); }
+.row .nostock { font-size: 11px; color: var(--bad); font-weight: 700; }
 .buy {
   background: var(--gold); color: #22301f; border: none; border-radius: 10px;
   padding: 9px 14px; font: inherit; font-weight: 700; cursor: pointer; min-width: 116px;
