@@ -26,18 +26,23 @@ export const FROST_TITAN = (() => {
 /** Each wave: which bosses come out. Every one but the last is a MEGA bug you know from raids. */
 export const WAVES = [
   ['aphid'],
-  ['beetle', 'aphid'],
-  ['locust', 'locust'],
-  ['grub', 'beetle'],
-  ['mantis', 'locust'],
-  ['titan', 'mantis'],
-  ['frost', 'aphid', 'aphid'],
+  ['spider', 'aphid'],
+  ['locust', 'spider'],
+  ['scorp', 'beetle'],
+  ['mantis', 'spitter'],
+  ['titan', 'scorp'],
+  ['frost', 'spitter', 'spider'],
 ];
+
+/** Levels never stop: health and bounty both climb forever, level by level. */
+export const HP_PER_LEVEL = 1.3;
+export const PAY_PER_LEVEL = 1.45;
 
 export function waveSpec(id, depth) {
   const base = id === 'frost' ? FROST_TITAN : bossOf(BUGS_BY_ID[id]);
-  const scale = Math.pow(1.3, depth);           // the lair gets deeper every time you clear it
-  return { ...base, hp: Math.round(base.hp * scale), bounty: Math.round(base.bounty * (1 + 0.25 * depth)) };
+  const scale = Math.pow(HP_PER_LEVEL, depth);
+  return { ...base, hp: Math.round(base.hp * scale),
+           bounty: Math.round(base.bounty * Math.pow(PAY_PER_LEVEL, depth)) };
 }
 
 /**
@@ -46,10 +51,13 @@ export function waveSpec(id, depth) {
  */
 export function waveReward(wave, earned, depth) {
   const base = Math.max(20000, earned / 2000);
-  return Math.floor(base * wave * Math.pow(2, wave - 1) * (1 + 0.25 * depth));
+  return Math.floor(base * wave * Math.pow(2, wave - 1) * Math.pow(PAY_PER_LEVEL, depth));
 }
 
 export function goldenReward(depth) { return 10 + 5 * depth; }
+
+/** Clear this level and the lair hands over a rideable Frost Wyrm. */
+export const MOUNT_LEVEL = 20;
 
 /** Direction from the cave mouth toward the middle of the garden. */
 const FACING = Math.atan2(-MOUTH.x, -MOUTH.z);
@@ -349,10 +357,10 @@ export class Lair {
     this.hooks.onWave?.(n, ids);
   }
 
-  /** A boss bite costs time, not blood. */
-  bitten() {
+  /** Getting hit costs time, not blood — each species stings for its own amount. */
+  hurt(seconds = BITE_PENALTY) {
     if (this.phase !== 'fight') return;
-    this.timeLeft = Math.max(0, this.timeLeft - BITE_PENALTY);
+    this.timeLeft = Math.max(0, this.timeLeft - seconds);
   }
 
   update(dt) {
@@ -391,14 +399,14 @@ export class Lair {
   label() {
     if (this.phase === 'break') {
       return this.wave === 0
-        ? `❄️ GNOME'S ICE LAIR · depth ${this.depth + 1} · get ready…`
+        ? `❄️ GNOME'S ICE LAIR · Level ${this.depth + 1} · get ready…`
         : `❄️ Wave ${this.wave} cleared! · next in ${Math.ceil(this.breakLeft)}`;
     }
     if (this.phase === 'fight') {
       const s = Math.max(0, Math.ceil(this.timeLeft));
       return `❄️ ICE LAIR · Wave ${this.wave}/${WAVES.length} · ⏱ ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
     }
-    if (this.phase === 'won') return `🏆 LAIR CLEARED · depth ${this.depth + 1} · walk out through the arch`;
+    if (this.phase === 'won') return `🏆 LAIR CLEARED · Level ${this.depth + 1} · walk out through the arch`;
     if (this.phase === 'frozen') return `🧊 The lair froze over · ${this.cleared} wave${this.cleared === 1 ? '' : 's'} cleared`;
     return '';
   }

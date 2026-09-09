@@ -140,10 +140,24 @@ export const BUGS = [
   { id:'aphid',  name:'Aphid',        level:1, hp:30,     speed:1.6, size:0.45, color:0x8bc34a, bounty:25 },
   { id:'beetle', name:'Leaf Beetle',  level:2, hp:130,    speed:1.3, size:0.62, color:0x6d4c41, bounty:500 },
   { id:'locust', name:'Locust',       level:3, hp:700,    speed:2.1, size:0.72, color:0xc9a227, bounty:15000 },
+  { id:'spider', name:'Jump Spider',  level:3, hp:900,    speed:2.4, size:0.8,  color:0x455a64, bounty:22000,
+    attack:'leap', hit:6, reach:11, shape:'spider' },
   { id:'grub',   name:'Root Grub',    level:4, hp:3600,   speed:0.9, size:0.95, color:0xe8c9a0, bounty:800000 },
+  { id:'scorp',  name:'Sand Scorpion',level:4, hp:5200,   speed:1.2, size:1.0,  color:0xffa000, bounty:1.4e6,
+    attack:'sting', hit:9, shape:'scorpion' },
   { id:'mantis', name:'Void Mantis',  level:5, hp:26000,  speed:1.8, size:1.15, color:0x7c4dff, bounty:1.2e8 },
+  { id:'spitter',name:'Acid Spitter', level:5, hp:34000,  speed:1.4, size:1.05, color:0x76ff03, bounty:2.2e8,
+    attack:'acid', hit:3, reach:10, shape:'spitter' },
   { id:'titan',  name:'Titan Weevil', level:6, hp:180000, speed:1.0, size:1.5,  color:0xff4081, bounty:1.4e10 },
 ];
+
+/** How each species fights, for the almanac and the shop. */
+export const ATTACK_TEXT = {
+  bite:  'chews on whatever it reaches',
+  leap:  'pounces on you from across the room',
+  sting: 'a tail sting that really hurts',
+  acid:  'spits acid at you from range',
+};
 export const BUGS_BY_ID = Object.fromEntries(BUGS.map(b => [b.id, b]));
 
 /** Each bug on a plot drags its growth down by this much. */
@@ -169,6 +183,16 @@ export const WEAPONS = [
   { id:'zapper',  name:'SUPER Zapper', tier:'super',     cost:2e11,  damage:11000, range:32,  cooldown:0.18, kind:'chain', chains:5 },
 ];
 export const WEAPONS_BY_ID = Object.fromEntries(WEAPONS.map(w => [w.id, w]));
+
+/**
+ * Weapons can be upgraded forever at the shop. Each level is +30% damage for
+ * a cost that grows faster than the damage, so it stays a real decision.
+ */
+export const WEAPON_STEP = 0.30;
+export function weaponDamageMult(level) { return Math.pow(1 + WEAPON_STEP, level); }
+export function weaponUpgradeCost(weapon, level) {
+  return Math.floor(weapon.cost * 0.75 * Math.pow(2.35, level));
+}
 
 /** Turrets stand on a plot like sprinklers and shoot bugs on their own. */
 export const TURRETS = [
@@ -303,10 +327,13 @@ export const PETS = [
   { id:'bunny',   name:'Bunny',        tier:'rare',         ability:'harvest', power:4.5,  shape:'bunny',  colors:[0xf5f5f5, 0xffcdd2] },
   { id:'cat',     name:'Barn Cat',     tier:'rare',         ability:'value',   power:0.06, shape:'cat',    colors:[0xff9800, 0xfff3e0] },
   { id:'fox',     name:'Fox',          tier:'legendary',    ability:'harvest', power:8,    shape:'cat',    colors:[0xf4511e, 0xffffff] },
+  { id:'hound',   name:'Gnome Hound',  tier:'legendary',    ability:'gnome',   power:1,    shape:'hound',  colors:[0x8d6e63, 0xffe0b2] },
   { id:'owl',     name:'Wise Owl',     tier:'mythic',       ability:'luck',    power:1.8,  shape:'owl',    colors:[0x8d6e63, 0xffe082] },
   { id:'drake',   name:'Baby Drake',   tier:'prismatic',    ability:'lure',    power:1,    shape:'drake',  colors:[0x7c4dff, 0x69f0ae] },
   { id:'phoenix', name:'Phoenix Chick',tier:'transcendent', ability:'value',   power:0.3,  shape:'drake',  colors:[0xff6d00, 0xffd54f] },
   { id:'sprite',  name:'Star Sprite',  tier:'super',        ability:'luck',    power:4.5,  shape:'sprite', colors:[0xffffff, 0xffe082] },
+  // Never hatches from an egg — the Ice Lair hands this one over at Level 20.
+  { id:'wyrm',    name:'Frost Wyrm',   tier:'carnivore',    ability:'ride',    power:1,    shape:'wyrm',   colors:[0x4fc3f7, 0xe1f5fe], mount:true },
 ];
 export const PETS_BY_ID = Object.fromEntries(PETS.map(p => [p.id, p]));
 
@@ -317,7 +344,26 @@ export const ABILITY_TEXT = {
   harvest:(p, lv) => `auto-picks ripe crops within ${(p.power + lv * 0.4).toFixed(1)}m`,
   pest:   (p, lv) => `${Math.round(p.power * lv * 12)} damage/s to nearby bugs`,
   lure:   (p, lv) => `${lureText(p.power * lv)} — feeds carnivores`,
+  gnome:  (p, lv) => `${gnomeText(p.power * lv)}, then chases him home`,
+  ride:   (p, lv) => `press <b>Y</b> to ride · frost breath does ${fmt(breathDamage(lv))} damage in a 12m cone`,
 };
+
+/** A ridden wyrm's breath. It climbs with the wyrm's level and never caps. */
+export function breathDamage(level) { return Math.round(4e6 * Math.pow(1.55, level - 1)); }
+
+/**
+ * Gnomes per second a hound sniffs out. Like the drake's lure it has no
+ * ceiling: more hounds and higher levels call them in faster.
+ */
+export function gnomeRate(power) { return Math.max(0, power) / 120; }
+
+export function gnomeText(power) {
+  const rate = gnomeRate(power);
+  if (rate <= 0) return 'calls no gnomes';
+  const secs = 1 / rate;
+  return secs >= 90 ? `barks up a gnome every ${(secs / 60).toFixed(1)} min`
+                    : `barks up a gnome every ${Math.round(secs)}s`;
+}
 
 /**
  * Bugs per second a lure calls in. Every drake and every level adds to it with
@@ -346,7 +392,7 @@ export function petXpFor(level) { return Math.floor(60 * Math.pow(1.45, level - 
 export const PET_MAX_LEVEL = 25;
 
 export function rollPet(weights) {
-  const pool = PETS.filter(p => weights[p.tier]);
+  const pool = PETS.filter(p => weights[p.tier] && !p.mount);
   const total = pool.reduce((a, p) => a + weights[p.tier], 0);
   let r = Math.random() * total;
   for (const p of pool) { r -= weights[p.tier]; if (r <= 0) return p; }
@@ -670,6 +716,7 @@ export const TROPHIES = [
   { id:'lairfound', name:'Secret Keeper',    hint:"Follow a gnome to his ice lair",  goal:1,     at:s => (s.caveFound ? 1 : 0), reward:5e6 },
   { id:'lair1',     name:'Lair Raider',      hint:'Clear the Ice Lair once',         goal:1,     at:s => s.stats.caveClears || 0, reward:0, golden:10 },
   { id:'lair10',    name:'Frost King',       hint:'Clear the Ice Lair 10 times',     goal:10,    at:s => s.stats.caveClears || 0, reward:0, golden:120 },
+  { id:'lair20',    name:'Wyrm Rider',       hint:'Clear Ice Lair Level 20',         goal:20,    at:s => s.stats.caveClears || 0, reward:0, golden:500 },
   { id:'golden1',   name:'Golden Touch',     hint:'Do one Golden Harvest',          goal:1,     at:s => s.prestiges, reward:0, golden:5 },
   { id:'golden10',  name:'Living Legend',    hint:'Do 10 Golden Harvests',          goal:10,    at:s => s.prestiges, reward:0, golden:100 },
 ];

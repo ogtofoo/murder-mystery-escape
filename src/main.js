@@ -2,12 +2,13 @@
 
 import * as THREE from 'three';
 import { PLANTS, PLANTS_BY_ID, PACKS, EGGS, TIERS, fmt, rollPack, plotCost, PLOT_COUNT, refundValue, SEED_REFUND,
-         CANS_BY_ID, SPRINKLERS_BY_ID, TURRETS_BY_ID, WEAPONS_BY_ID, plotLayout,
-         raidLevel, BUG_SLOW, TROPHIES, goldenMultiplier, WEATHERS, rollWeather, rollMutation,
+         CANS_BY_ID, SPRINKLERS_BY_ID, TURRETS_BY_ID, WEAPONS_BY_ID, WEAPONS, PETS, plotLayout,
+         raidLevel, rollBug, BUG_SLOW, TROPHIES, goldenMultiplier, WEATHERS, rollWeather, rollMutation,
          mutationMultiplier, mutationName, mutationColor,
-         PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS_BY_ID, rollPet, moodOf, TREAT_VALUE, lureRate,
+         PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS_BY_ID, rollPet, moodOf, TREAT_VALUE, lureRate, gnomeRate,
          UPGRADES_BY_ID, upgradeCost, dietSummary, dietBonus, bugBite, PLANT_REGEN_PER_SEC,
-         DEFENCES_BY_ID, PROPS_BY_ID, HATS_BY_ID, OUTFITS_BY_ID, mutationScale, WEATHERS as WX, BUGS_BY_ID } from './data.js';
+         DEFENCES_BY_ID, PROPS_BY_ID, HATS_BY_ID, OUTFITS_BY_ID, mutationScale, WEATHERS as WX, BUGS_BY_ID,
+         breathDamage, weaponUpgradeCost, weaponDamageMult } from './data.js';
 import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount,
          growth, isRipe, isRegrowing, harvestsLeft, cycleSeconds,
          refreshSprinklers, plotSpeed, sprinklerSpeed, sprinklerAt, stockCount, addSprinkler, takeSprinkler,
@@ -17,7 +18,8 @@ import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spen
          feedPet, decayHappiness, feedProgress, feedCarnivore,
          defenceAt, defenceCover, stealable,
          refreshQuests, questProgress, questDone, claimQuest,
-         refreshShelf, shelfCount, takeFromShelf } from './state.js';
+         refreshShelf, shelfCount, takeFromShelf,
+         weaponLevel, weaponDamage, nextWeaponCost } from './state.js';
 import { buildWorld } from './world.js';
 import { buildPlant, animatePlant, applyMutation, setCarnivoreFruit } from './plants.js';
 import { setHat, setOutfit } from './gardener.js';
@@ -35,7 +37,7 @@ import { buildProp, litProp } from './props.js';
 import { renderPadTest } from './padtest.js';
 import { BUILD_LABEL } from './build.js';
 import { buildCave, buildMouth, Lair, CAVE_ORIGIN, CAVE_RADIUS, FOLLOW_RANGE, WAVES,
-         CAVE_COOLDOWN, CAVE_RETRY, goldenReward } from './cave.js';
+         CAVE_COOLDOWN, CAVE_RETRY, goldenReward, MOUNT_LEVEL } from './cave.js';
 
 let menuSuppressUntil = 0;
 // ?gnome in the address bar: a Garden Gnome turns up right away and keeps
@@ -105,6 +107,7 @@ const ui = new UI({
   toggleShovel: () => toggleShovel(),
   toggleWeapon: () => toggleWeapon(),
   buyWeapon: id => buyWeapon(id),
+  upgradeWeapon: id => upgradeWeapon(id),
   buyTurret: id => buyTurret(id),
   buyDefence: id => buyDefence(id),
   buyProp: id => buyProp(id),
@@ -226,6 +229,18 @@ function buyWeapon(id) {
   state.weapons[id] = true;
   ui.toast(`Bought the ${w.name} — press <b>R</b> to arm it`, 'gold');
   sfx.buy(); ui.refresh(); save();
+}
+
+function upgradeWeapon(id) {
+  const w = WEAPONS_BY_ID[id];
+  if (!w || !state.weapons[id]) return;
+  const cost = nextWeaponCost(w);
+  if (!spend(cost)) { ui.toast('Not enough sheckles for that upgrade.', 'bad'); sfx.deny(); return; }
+  state.weaponLevels[id] = weaponLevel(id) + 1;
+  ui.toast(`🔧 <b>${w.name}</b> upgraded to Lv ${weaponLevel(id)} — <b>${fmt(Math.round(weaponDamage(w)))}</b> damage`, 'gold');
+  sfx.buy();
+  ui.refresh();
+  save();
 }
 
 function buyTurret(id) {
@@ -808,6 +823,27 @@ function updateLure(dt) {
   sfx.roar();
 }
 
+/**
+ * Hounds sniff gnomes out of the hedgerow at any hour — the only way to meet
+ * one without waiting for nightfall, and the fastest road to the Ice Lair.
+ */
+let gnomeCredit = 0;
+function updateGnomeLure(dt) {
+  const power = petPower('gnome');
+  if (power <= 0) { gnomeCredit = 0; return; }
+  gnomeCredit += gnomeRate(power) * dt;
+  if (gnomeCredit < 1) return;
+  gnomeCredit = 0;
+  if (thieves.count >= 6 || thieves.thieves.some(x => x.spec.greedy)) return;   // one gnome at a time
+
+  const th = thieves.spawn(state.owned, state.prestiges, 'gnome', 0);
+  if (!th) return;
+  const hound = petPack.pets.find(p => p.spec.ability === 'gnome');
+  if (hound) { hound.hop = 0.9; burst({ x: hound.mesh.position.x, z: hound.mesh.position.z }, 0xffe0b2); }
+  ui.toast(`🐕 Your hound barks — a <b>Garden Gnome</b> is sneaking in${state.caveFound ? '' : '. Follow him home!'}`, 'gold');
+  sfx.bark();
+}
+
 /** Eggs tick down; pets earn experience just by being out. */
 let petClock = 0;
 function updatePets(dt, t) {
@@ -817,7 +853,7 @@ function updatePets(dt, t) {
   const happiness = {};
   for (const p of state.pets) happiness[p.uid] = p.happy || 0;
   petPack.update(dt, t, player.pos, player.yaw, performance.now() < petCallUntil, happiness);
-  if (!lair.inside) updateLure(dt);
+  if (!lair.inside) { updateLure(dt); updateGnomeLure(dt); }
 
   petClock += dt;
   if (petClock < 1) return;
@@ -897,8 +933,17 @@ const thieves = new ThiefPack(scene, {
       : '🧙 The gnome is scurrying off somewhere — <b>follow him!</b>', 'gold');
   },
   onHome: th => {
-    if (state.caveFound) return true;                      // straight in, he knows the way
     const d = Math.hypot(player.pos.x - th.mesh.position.x, player.pos.z - th.mesh.position.z);
+    if (state.caveFound) {
+      // Chase him all the way home and he leaves the boulder rolled aside.
+      if (d <= FOLLOW_RANGE && caveOpensIn() > 0) {
+        state.caveUntil = 0;
+        ui.toast('🧙 You chased the gnome right to his door — <b>the lair is open again!</b>', 'gold');
+        sfx.buy();
+        save();
+      }
+      return true;
+    }
     if (d > FOLLOW_RANGE) return false;                    // keep waiting at the door
     state.caveFound = true;
     mouth.setFound(true);
@@ -927,10 +972,20 @@ const thieves = new ThiefPack(scene, {
 
 let thiefClock = 0;
 let thiefSpawns = 0;
+let barkClock = 0;
 
 /** After dark, someone always fancies your crops. */
 function updateThieves(dt, t) {
   thieves.update(dt, t);
+
+  // Point the hounds at whichever gnome is legging it, so you can just follow the dog.
+  const runner = thieves.runningGnome;
+  petPack.chase = runner ? { x: runner.mesh.position.x, z: runner.mesh.position.z } : null;
+  if (runner && petPack.hunting) {
+    barkClock -= dt;
+    if (barkClock <= 0) { barkClock = 1.6; sfx.bark(); }
+  }
+
   if (lair.inside) { thiefClock = 0; return; }
 
   if (DEBUG_GNOME) {
@@ -989,18 +1044,20 @@ const bugs = new BugSystem(scene, {
   onAttach: (index, specId) => { addBug(index, specId); },
   onDetach: (index, specId) => { removeBug(index, specId); },
   playerPos: () => player.pos,
-  onBite: bug => {
+  onAttack: (bug, kind) => {
     if (!lair.inside) return;
-    lair.bitten();
-    // Shoved back, and the clock takes the hit.
+    const cost = bug.spec.hit || 4;
+    lair.hurt(cost);
+    // Knocked back, and the clock takes the hit. A wyrm shrugs some of it off.
     const dx = player.pos.x - bug.mesh.position.x, dz = player.pos.z - bug.mesh.position.z;
     const d = Math.hypot(dx, dz) || 1;
-    player.pos.x += (dx / d) * 2.2;
-    player.pos.z += (dz / d) * 2.2;
-    player.vy = 4;
-    player.grounded = false;
+    const shove = kind === 'leap' ? 4.5 : kind === 'acid' ? 0 : 2.2;
+    player.pos.x += (dx / d) * shove;
+    player.pos.z += (dz / d) * shove;
+    if (shove) { player.vy = 4; player.grounded = false; }
     caveHit = 0.5;
-    ui.toast(`🦷 <b>${bug.spec.name}</b> bit you — <b>−${4}s</b>`, 'bad');
+    const verb = { sting: '🦂 stung you', acid: '🧪 sprayed acid on you', leap: '🕷️ pounced on you' }[kind] || '🦷 bit you';
+    ui.toast(`<b>${bug.spec.name}</b> ${verb} — <b>−${cost}s</b>`, 'bad');
     sfx.deny();
     gamepad.rumble(0.7, 220);
   },
@@ -1114,6 +1171,19 @@ const lair = new Lair(bugs, {
     save();
   },
   onClear: depth => {
+    const level = depth + 1;
+    // Level 20 is the big one: the lair gives up a wyrm you can ride.
+    if (level >= MOUNT_LEVEL && !state.pets.some(p => PETS_BY_ID[p.id]?.mount)) {
+      const spec = PETS.find(p => p.mount);
+      const pet = { uid: state.nextPetUid++, id: spec.id, level: 1, xp: 0, happy: 100 };
+      state.pets.push(pet);
+      state.equipped.push(pet.uid);
+      syncPets();
+      ui.showHatch(spec);
+      ui.toast(`🐉 <b>LEVEL ${MOUNT_LEVEL}!</b> The lair gives up a <b>${spec.name}</b> — press <b>Y</b> to ride it.`, 'gold');
+      sfx.roar();
+      gamepad.rumble(1, 1200);
+    }
     const gold = goldenReward(depth);
     state.golden += gold;
     state.stats.caveClears = (state.stats.caveClears || 0) + 1;
@@ -1138,13 +1208,16 @@ function caveOpensIn() { return Math.max(0, state.caveUntil - Date.now()); }
 
 /** Top-of-screen line while a gnome is running home and the lair is still secret. */
 function gnomeTracker() {
-  if (state.caveFound) return '';
   const g = thieves.runningGnome;
   if (!g) return '';
+  // Once the lair is found, only worth following when it is still shut.
+  const reopen = state.caveFound && caveOpensIn() > 0;
+  if (state.caveFound && !reopen) return '';
   const d = Math.round(Math.hypot(player.pos.x - g.mesh.position.x, player.pos.z - g.mesh.position.z));
+  const why = reopen ? 'chase him to reopen the lair' : `stay within ${FOLLOW_RANGE}m`;
   return g.mode === 'home'
     ? `🧙 The gnome is at his door · ${d}m away · get within ${FOLLOW_RANGE}m! · ${Math.ceil(g.timer)}s`
-    : `🧙 Follow the gnome! · ${d}m away · stay within ${FOLLOW_RANGE}m`;
+    : `🧙 Follow the gnome! · ${d}m away · ${why}`;
 }
 
 function enterCave() {
@@ -1302,7 +1375,7 @@ function damageBoost() { return 1 + upgradeLevel('venom') * 0.3; }
 function fireWeapon() {
   const spec = WEAPONS_BY_ID[player.weapon];
   if (!spec || fireCooldown > 0) return;
-  const w = { ...spec, damage: spec.damage * damageBoost() };
+  const w = { ...spec, damage: weaponDamage(spec) * damageBoost() };
   fireCooldown = w.cooldown;
   player.swing = 1;
 
@@ -1547,6 +1620,7 @@ function updatePrompt() {
 
 function interact() {
   if (ui.modalOpen) return;
+  if (ridingUid !== null) { breathe(); return; }
   if (lair.inside) { if (cave.nearExit(player.pos)) leaveCave(); return; }
   if (state.caveFound && mouth.near(player.pos)) { enterCave(); return; }
   if (target >= 0) {
@@ -1575,6 +1649,80 @@ function interact() {
     if (spot && removeNearestProp(spot.x, spot.z)) return;
   }
   if (nearStall()) ui.toggleShop(true);
+}
+
+// ---------------------------------------------------------------- riding
+
+/** The Frost Wyrm you are sitting on, if any. */
+let ridingUid = null;
+
+function bestMount() {
+  const mounts = petPack.mounts();
+  if (!mounts.length) return null;
+  return mounts.reduce((best, m) => {
+    const lv = id => state.pets.find(p => p.uid === id)?.level || 0;
+    return lv(m.uid) > lv(best.uid) ? m : best;
+  });
+}
+
+function toggleRide() {
+  if (ridingUid !== null) { dismount(); return; }
+  const mount = bestMount();
+  if (!mount) {
+    if (state.pets.some(p => PETS_BY_ID[p.id]?.mount)) ui.toast('Your wyrm is put away — take it out in the Pets tab.', 'bad');
+    else ui.toast('You have nothing to ride yet. Clear <b>Ice Lair Level 20</b>.', 'bad');
+    sfx.deny();
+    return;
+  }
+  ridingUid = mount.uid;
+  mount.mode = 'ridden';
+  petPack.rider = { x: player.pos.x, z: player.pos.z, yaw: player.yaw };
+  player.setRiding(mount);
+  const lv = state.pets.find(p => p.uid === mount.uid)?.level || 1;
+  ui.toast(`🐉 You climb onto the <b>${mount.spec.name}</b> — <b>[E]</b> breathes frost for ${fmt(breathDamage(lv))}`, 'gold');
+  sfx.roar();
+  gamepad.rumble(0.6, 320);
+}
+
+function dismount() {
+  const mount = ridingUid !== null ? petPack.byUid(ridingUid) : null;
+  if (mount) { mount.mode = 'roam'; mount.target = null; mount.wait = 0; }
+  ridingUid = null;
+  petPack.rider = null;
+  player.setRiding(null);
+  ui.toast('You hop down.');
+}
+
+/** Keep the mount underneath you, and drop you off if it is put away. */
+function updateRide() {
+  if (ridingUid === null) return;
+  const mount = petPack.byUid(ridingUid);
+  if (!mount) { dismount(); return; }
+  mount.mode = 'ridden';
+  petPack.rider = { x: player.pos.x, z: player.pos.z, yaw: player.yaw };
+}
+
+/** The wyrm's breath: a wide cone of frost that flattens anything in it. */
+let breathCooldown = 0;
+function breathe() {
+  if (breathCooldown > 0) return;
+  breathCooldown = 0.55;
+  const mount = petPack.byUid(ridingUid);
+  const lv = state.pets.find(p => p.uid === ridingUid)?.level || 1;
+  const damage = breathDamage(lv) * damageBoost();
+  const origin = player.headPosition();
+  const dir = player.lookDirection();
+  const hits = [];
+  for (let i = 1; i <= 4; i++) {
+    const at = origin.clone().addScaledVector(dir, i * 3);
+    for (const bug of bugs.near(at.x, at.z, 1.2 + i * 0.7)) if (!hits.includes(bug)) hits.push(bug);
+    for (const th of thieves.near(at.x, at.z, 1.2 + i * 0.7)) thieves.damage(th, damage);
+    burst({ x: at.x, z: at.z }, 0x9fe8ff);
+  }
+  for (const bug of hits) bugs.damage(bug, damage);
+  if (mount) mount.hop = 0.6;
+  sfx.roar();
+  if (hits.length) gamepad.rumble(0.35, 90);
 }
 
 /** Where the player is looking on the ground, or null if they are aiming at the sky. */
@@ -1614,6 +1762,7 @@ window.addEventListener('keydown', e => {
     case 'KeyR': toggleWeapon(); break;
     case 'KeyC': callPets(); break;
     case 'KeyT': feedNearestPet(); break;
+    case 'KeyY': toggleRide(); break;
     default:
       if (/^Digit[1-9]$/.test(e.code)) ui.selectIndex(Number(e.code.slice(5)) - 1);
   }
@@ -1865,7 +2014,10 @@ function tick() {
   updateCarnivores(dt);
   updateThieves(dt, t);
   fireCooldown = Math.max(0, fireCooldown - dt);
-  if (player.weapon && using) fireWeapon();
+  breathCooldown = Math.max(0, breathCooldown - dt);
+  updateRide();
+  if (ridingUid !== null) { if (using) breathe(); }
+  else if (player.weapon && using) fireWeapon();
   player.swing = Math.max(0, player.swing - dt * 4);
   ui.setBugCount(lair.inside ? 0 : bugs.count, lair.inside ? 0 : thieves.count);
   const night = isNight(phase);
@@ -1935,6 +2087,8 @@ function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
 window.game = { build: BUILD_LABEL, sky, petPack, thieves, cave, mouth, lair, enterCave, leaveCave, openPack,
+                toggleRide, dismount, breathe, upgradeWeapon, weaponLevel, weaponDamage, nextWeaponCost,
+                riding: () => ridingUid, PETS_BY_ID, BUGS_BY_ID, WAVES, rollBug,
                 sendGnome: () => thieves.spawn(state.owned, state.prestiges, 'gnome', 0), callPets, refreshQuests, refreshShelf, shelfCount, isNight, questDone, questProgress, claimQuest, updateCarnivores, updateLure, petPower,
                 buyDefence, placeDefence, buyProp, placeProp, syncProps, updateThieves,
                 growth, isRipe, feedProgress, cropValue, fmt, PLANTS_BY_ID, feedNearestPet, doGoldenHarvest, updateWeather, sellDevice, buyEgg, hatchEgg, buyUpgrade, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,

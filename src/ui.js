@@ -11,7 +11,8 @@ import { PLANTS, PLANTS_BY_ID, PACKS, TIERS, TIER_ORDER, PLOT_COUNT, fmt, refund
          UPGRADES, upgradeCost, rankFor, nextRank } from './data.js';
 import { state, seedCount, stockCount, goldenPending, canGoldenHarvest, trophyProgress, cropValue,
          upgradeLevel, nextUpgradeCost, equippedPets, luckMultiplier,
-         questProgress, questDone, shelfCount } from './state.js';
+         questProgress, questDone, shelfCount,
+         weaponLevel, weaponDamage, nextWeaponCost } from './state.js';
 
 const $ = sel => document.querySelector(sel);
 
@@ -440,20 +441,25 @@ export class UI {
       </div>`;
     }
     html += `<div class="tierhead">Sprinklers and turrets sell back out of the shed at half price</div>
-      <div class="tierhead">Weapons — bugs raid the garden and chew on your crops, slowing them down</div>`;
+      <div class="tierhead">Weapons — buy one, then upgrade it forever: every level is +30% damage</div>`;
     for (const w of WEAPONS) {
       const owned = !!state.weapons[w.id];
+      const lv = weaponLevel(w.id);
+      const dmg = weaponDamage(w);
+      const cost = nextWeaponCost(w);
       const how = { melee: 'swing at anything close', spray: `sprays a ${w.splash}m cloud`,
                     beam: 'hitscan, long range', chain: `arcs to ${w.chains} bugs at once` }[w.kind];
       html += `<div class="row">
         <div class="stripe" style="background:${TIERS[w.tier].css}"></div>
         <div>
-          <div class="name">${w.name}</div>
-          <div class="meta"><b>${fmt(w.damage)} damage</b> every ${w.cooldown}s · range ${w.range}m · ${how}</div>
+          <div class="name">${w.name}${lv ? ` <span class="lvl">Lv ${lv}</span>` : ''}</div>
+          <div class="meta"><b>${fmt(Math.round(dmg))} damage</b> every ${w.cooldown}s · range ${w.range}m · ${how}${
+            lv ? ` · upgraded from ${fmt(w.damage)}` : ''}</div>
         </div>
         <div class="own">${owned ? 'owned' : ''}</div>
-        <button class="buy" data-weapon="${w.id}" ${owned || state.money < w.cost ? 'disabled' : ''}>
-          ${owned ? '✓ owned' : '₪ ' + fmt(w.cost)}</button>
+        ${owned ? `<button class="buy" data-upweapon="${w.id}" ${state.money < cost ? 'disabled' : ''}>
+            ⬆ Lv ${lv + 1}<br>₪ ${fmt(cost)}</button>`
+          : `<button class="buy" data-weapon="${w.id}" ${state.money < w.cost ? 'disabled' : ''}>₪ ${fmt(w.cost)}</button>`}
       </div>`;
     }
     html += `<div class="tierhead">Turrets — stand one on a plot and it shoots bugs for you, day and night</div>`;
@@ -476,6 +482,9 @@ export class UI {
     this.el.body.innerHTML = html;
     for (const b of this.el.body.querySelectorAll('[data-weapon]')) {
       b.addEventListener('click', () => this.hooks.buyWeapon(b.dataset.weapon));
+    }
+    for (const b of this.el.body.querySelectorAll('[data-upweapon]')) {
+      b.addEventListener('click', () => this.hooks.upgradeWeapon(b.dataset.upweapon));
     }
     for (const b of this.el.body.querySelectorAll('[data-turret]')) {
       b.addEventListener('click', () => this.hooks.buyTurret(b.dataset.turret));

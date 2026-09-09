@@ -48,6 +48,54 @@ function buildBug(spec) {
     }
   }
 
+  // Species that fight back get a silhouette you can read across the garden.
+  if (spec.shape === 'spider') {
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 2; i++) {
+        const knee = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.03, 0.5, 4), dark);
+        knee.position.set(side * 0.34, 0.42, -0.1 + i * 0.3);
+        knee.rotation.z = side * 0.9;
+        g.add(knee);
+      }
+    }
+    for (const side of [-1, 1]) {
+      const fang = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.18, 4), dark);
+      fang.position.set(side * 0.08, 0.2, 0.56);
+      fang.rotation.x = Math.PI / 2.2;
+      g.add(fang);
+    }
+  } else if (spec.shape === 'scorpion') {
+    const tail = new THREE.Group();
+    for (let i = 0; i < 4; i++) {
+      const seg = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12 - i * 0.012, 0), shell);
+      seg.position.set(0, 0.42 + i * 0.22, -0.42 - i * 0.06);
+      tail.add(seg);
+    }
+    const barb = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.28, 5), dark);
+    barb.position.set(0, 1.24, -0.62);
+    barb.rotation.x = 0.9;
+    tail.add(barb);
+    g.add(tail);
+    g.userData.tail = tail;
+    for (const side of [-1, 1]) {                       // pincers
+      const claw = new THREE.Mesh(new THREE.IcosahedronGeometry(0.15, 0), shell);
+      claw.position.set(side * 0.3, 0.2, 0.5);
+      claw.scale.set(1, 0.6, 1.4);
+      g.add(claw);
+    }
+  } else if (spec.shape === 'spitter') {
+    const sac = new THREE.Mesh(new THREE.IcosahedronGeometry(0.26, 0),
+      new THREE.MeshStandardMaterial({ color: 0x76ff03, emissive: 0x33691e, emissiveIntensity: 0.7,
+        transparent: true, opacity: 0.85, flatShading: true }));
+    sac.position.set(0, 0.5, -0.28);
+    g.add(sac);
+    g.userData.sac = sac;
+    const snout = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.34, 5), dark);
+    snout.position.set(0, 0.28, 0.62);
+    snout.rotation.x = Math.PI / 2;
+    g.add(snout);
+  }
+
   if (spec.boss) {
     // Spiky crown so a MEGA bug reads as a boss at a glance.
     for (let i = 0; i < 5; i++) {
@@ -59,7 +107,7 @@ function buildBug(spec) {
     }
   }
   g.scale.setScalar(spec.size);
-  g.userData = { legs, body };
+  g.userData = { legs, body, tail: g.userData.tail || null, sac: g.userData.sac || null };
   return g;
 }
 
@@ -85,6 +133,7 @@ export class BugSystem {
     this.hooks = hooks;
     this.bugs = [];
     this.effects = [];
+    this.spits = [];        // acid globs in flight
   }
 
   get count() { return this.bugs.length; }
@@ -144,12 +193,14 @@ export class BugSystem {
     const bug = this.spawn(spec, x, z, -1);
     bug.hunter = true;
     bug.biteCd = 1.2;
+    bug.leap = 0;
     bug.bar.visible = false;
     return bug;
   }
 
   /** Remove every arena bug without paying bounties. */
   clearArena() {
+    this.clearSpits();
     for (const bug of [...this.bugs]) {
       if (!bug.arena) continue;
       this.bugs.splice(this.bugs.indexOf(bug), 1);
@@ -186,25 +237,11 @@ export class BugSystem {
 
   update(dt, t, camera) {
     const cells = this.hooks.plotCells();
+    this.updateSpits(dt);
     for (let i = this.bugs.length - 1; i >= 0; i--) {
       const bug = this.bugs[i];
       if (bug.hunter) {
-        // Charge the gardener; bite once in reach, then wind up again.
-        const p = this.hooks.playerPos();
-        const dx = p.x - bug.mesh.position.x;
-        const dz = p.z - bug.mesh.position.z;
-        const d = Math.hypot(dx, dz);
-        const reach = 0.7 + bug.spec.size * 0.45;
-        if (d > reach) {
-          const v = bug.spec.speed * (bug.spec.boss ? 2.4 : 1.5) * dt;
-          bug.mesh.position.x += (dx / d) * v;
-          bug.mesh.position.z += (dz / d) * v;
-          bug.mesh.rotation.y = Math.atan2(dx, dz);
-          bug.biteCd = Math.min(bug.biteCd, 0.5);
-        } else {
-          bug.biteCd -= dt;
-          if (bug.biteCd <= 0) { bug.biteCd = 1.5; this.hooks.onBite?.(bug); }
-        }
+        this.hunt(bug, dt, t);
       } else if (!bug.attached) {
         const cell = cells[bug.target];
         const dx = cell.x - bug.mesh.position.x;
@@ -220,6 +257,17 @@ export class BugSystem {
           bug.mesh.rotation.y = Math.atan2(dx, dz);
         }
       }
+
+      // Tails coil to strike, acid sacs pulse when they are full.
+      if (bug.mesh.userData.tail) {
+        bug.mesh.userData.tail.rotation.x = -0.3 + Math.sin(t * 3 + bug.phase) * 0.25
+          + (bug.strike > 0 ? bug.strike * 1.2 : 0);
+      }
+      if (bug.mesh.userData.sac) {
+        const k = 1 + Math.sin(t * 5 + bug.phase) * 0.12;
+        bug.mesh.userData.sac.scale.setScalar(k);
+      }
+      bug.strike = Math.max(0, (bug.strike || 0) - dt * 3);
 
       // Scuttle: legs paddle, body bobs; attached bugs chew in place.
       const rate = bug.attached ? 9 : 13;
@@ -238,6 +286,108 @@ export class BugSystem {
         bug.bar.userData.fill.position.x = -0.39 * (1 - k);
         if (camera) bug.bar.quaternion.copy(camera.quaternion);
       }
+    }
+  }
+
+  /**
+   * Arena behaviour: every species closes on the gardener its own way.
+   * Biters and stingers walk in, spitters keep their distance and spray acid,
+   * spiders wind up and pounce.
+   */
+  hunt(bug, dt, t) {
+    const p = this.hooks.playerPos();
+    const dx = p.x - bug.mesh.position.x;
+    const dz = p.z - bug.mesh.position.z;
+    const d = Math.hypot(dx, dz) || 0.001;
+    const spec = bug.spec;
+    const kind = spec.attack || 'bite';
+    const speed = spec.speed * (spec.boss ? 2.4 : 1.5);
+    bug.biteCd -= dt;
+
+    // Mid-pounce: fly the arc, then land and check the hit.
+    if (bug.leap > 0) {
+      bug.leap -= dt;
+      bug.mesh.position.x += bug.leapV.x * dt;
+      bug.mesh.position.z += bug.leapV.z * dt;
+      bug.mesh.position.y = Math.max(0, Math.sin((1 - bug.leap / bug.leapT) * Math.PI) * 2.2 * spec.size);
+      if (bug.leap <= 0) {
+        bug.mesh.position.y = 0;
+        bug.biteCd = 1.6;
+        const land = Math.hypot(p.x - bug.mesh.position.x, p.z - bug.mesh.position.z);
+        if (land < 2.4 + spec.size) this.hooks.onAttack?.(bug, 'leap');
+      }
+      return;
+    }
+
+    // `tol` is the deadband: spitters hold a loose distance, chargers close right in.
+    const walkTo = (keep, tol = 0.6) => {
+      if (Math.abs(d - keep) < tol) return;
+      const dir = d > keep ? 1 : -1;
+      bug.mesh.position.x += (dx / d) * speed * dt * dir;
+      bug.mesh.position.z += (dz / d) * speed * dt * dir;
+    };
+    bug.mesh.rotation.y = Math.atan2(dx, dz);
+
+    if (kind === 'acid') {
+      walkTo(Math.min(spec.reach || 10, 9) * 0.8);
+      if (bug.biteCd <= 0 && d <= (spec.reach || 10)) {
+        bug.biteCd = 2.2;
+        this.spit(bug, p);
+      }
+      return;
+    }
+
+    if (kind === 'leap') {
+      if (d < (spec.reach || 11) && bug.biteCd <= 0) {
+        // Crouch, then launch along a flat arc that lands on the gardener.
+        bug.leapT = Math.max(0.45, Math.min(1.1, d / 12));
+        bug.leap = bug.leapT;
+        bug.leapV = { x: dx / bug.leapT, z: dz / bug.leapT };
+        bug.strike = 1;
+        return;
+      }
+      walkTo(0.8 + spec.size * 0.45, 0.05);
+      return;
+    }
+
+    // Bite and sting both want to be right on top of you.
+    const reach = 0.7 + spec.size * 0.45;
+    if (d > reach) { walkTo(reach, 0.05); bug.biteCd = Math.min(bug.biteCd, 0.5); return; }
+    if (bug.biteCd <= 0) {
+      bug.biteCd = kind === 'sting' ? 2.4 : 1.5;
+      bug.strike = 1;
+      this.hooks.onAttack?.(bug, kind);
+    }
+  }
+
+  /** Launch an acid glob at a point; it damages on arrival. */
+  spit(bug, target) {
+    const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22 * bug.spec.size, 0),
+      new THREE.MeshBasicMaterial({ color: 0x9cff57 }));
+    mesh.position.copy(bug.mesh.position).setY(0.5 * bug.spec.size);
+    this.scene.add(mesh);
+    const dx = target.x - mesh.position.x, dz = target.z - mesh.position.z;
+    const dist = Math.hypot(dx, dz) || 1;
+    const time = Math.max(0.25, dist / 16);
+    this.spits.push({ mesh, bug, life: time, total: time, vx: dx / time, vz: dz / time, y0: mesh.position.y });
+    bug.strike = 1;
+  }
+
+  updateSpits(dt) {
+    for (let i = this.spits.length - 1; i >= 0; i--) {
+      const s = this.spits[i];
+      s.life -= dt;
+      s.mesh.position.x += s.vx * dt;
+      s.mesh.position.z += s.vz * dt;
+      const k = 1 - s.life / s.total;
+      s.mesh.position.y = s.y0 + Math.sin(k * Math.PI) * 1.6 - k * s.y0;
+      if (s.life > 0) continue;
+      const p = this.hooks.playerPos();
+      if (Math.hypot(p.x - s.mesh.position.x, p.z - s.mesh.position.z) < 2.6) {
+        this.hooks.onAttack?.(s.bug, 'acid');
+      }
+      this.scene.remove(s.mesh);
+      this.spits.splice(i, 1);
     }
   }
 
@@ -291,8 +441,14 @@ export class BugSystem {
     if (!opts.silent) this.hooks.onKill(bug);
   }
 
+  clearSpits() {
+    for (const s of this.spits) this.scene.remove(s.mesh);
+    this.spits = [];
+  }
+
   /** Wipe every bug (used when a save is replaced). */
   clear() {
+    this.clearSpits();
     for (const bug of [...this.bugs]) {
       this.bugs.splice(this.bugs.indexOf(bug), 1);
       this.scene.remove(bug.mesh, bug.bar);

@@ -117,6 +117,47 @@ const SHAPES = {
     g.add(tail);
     eyes(g, 0.52, 0.56, 0.14, 0.055);
   },
+  hound(g, p, a, b) {
+    g.add(part(ball(), a, [0, 0.3, -0.05], [0.5, 0.44, 0.9]));            // barrel chest
+    g.add(part(ball(), a, [0, 0.46, 0.4], [0.36, 0.34, 0.38]));           // head
+    g.add(part(box(), b, [0, 0.38, 0.62], [0.24, 0.18, 0.3]));            // snout
+    g.add(part(ball(), eyeMat(), [0, 0.44, 0.78], 0.09));                 // wet nose
+    for (const side of [-1, 1]) {
+      g.add(part(box(), b, [side * 0.26, 0.42, 0.34], [0.09, 0.34, 0.2])); // floppy ears
+      for (const front of [-1, 1]) {
+        g.add(part(cyl(), b, [side * 0.2, 0.12, front * 0.3], [0.1, 0.26, 0.1]));
+      }
+    }
+    const tail = part(cone(), a, [0, 0.46, -0.5], [0.13, 0.4, 0.13]);
+    tail.rotation.x = -0.7;
+    tail.userData.spin = 0;
+    g.add(tail);
+    g.userData.tail = tail;
+    eyes(g, 0.52, 0.6, 0.13, 0.055);
+  },
+  wyrm(g, p, a, b) {
+    // Big enough to sit on: long body, broad wings, horned head.
+    g.add(part(ball(), a, [0, 0.85, -0.1], [1.5, 1.15, 2.3]));
+    for (let i = 0; i < 4; i++) {                                          // tapering tail
+      const seg = part(ball(), a, [0, 0.8 - i * 0.05, -1.5 - i * 0.5], [0.7 - i * 0.14, 0.6 - i * 0.12, 0.7]);
+      g.add(seg);
+    }
+    g.add(part(cone(), b, [0, 0.7, -3.5], [0.5, 1.0, 0.5])).rotation.x = -Math.PI / 2;
+    g.add(part(ball(), a, [0, 1.35, 1.5], [0.8, 0.75, 0.95]));             // head
+    g.add(part(cone(), b, [0, 1.2, 2.35], [0.42, 0.6, 0.42])).rotation.x = Math.PI / 2;
+    for (const side of [-1, 1]) {
+      const w = part(ball(), b, [side * 1.7, 1.35, -0.3], [1.9, 0.14, 1.5]);
+      w.userData.wing = side;
+      g.add(w);
+      g.add(part(cone(), b, [side * 0.28, 1.9, 1.35], [0.16, 0.6, 0.16])); // horns
+      g.add(part(cyl(), b, [side * 0.6, 0.3, 0.7], [0.18, 0.6, 0.18]));    // legs
+      g.add(part(cyl(), b, [side * 0.6, 0.3, -0.9], [0.18, 0.6, 0.18]));
+    }
+    for (let i = 0; i < 5; i++) {                                          // spine ridge
+      g.add(part(cone(), b, [0, 1.5 + Math.sin(i) * 0.05, 0.8 - i * 0.55], [0.16, 0.42, 0.16]));
+    }
+    eyes(g, 1.5, 2.05, 0.3, 0.09);
+  },
   sprite(g, p, a, b) {
     const core = part(ball(), a, [0, 0.2, 0], 0.5);
     core.userData.spin = 1.4;
@@ -135,7 +176,7 @@ const SHAPES = {
   },
 };
 
-const FLYERS = new Set(['bee', 'owl', 'drake', 'sprite']);
+const FLYERS = new Set(['bee', 'owl', 'drake', 'sprite', 'wyrm']);
 
 export function buildPet(spec) {
   const g = new THREE.Group();
@@ -147,8 +188,9 @@ export function buildPet(spec) {
     wings: g.children.filter(c => c.userData.wing),
     spinners: g.children.filter(c => c.userData.spin),
     phase: Math.random() * 6,
+    tail: g.userData.tail || null,
   };
-  g.scale.setScalar(0.62);
+  g.scale.setScalar(spec.mount ? 1 : 0.62);
   return g;
 }
 
@@ -224,8 +266,25 @@ export class PetPack {
       const u = p.mesh.userData;
       const happy = (happiness[p.uid] || 0) / 100;
 
+      // A mount you are sitting on just carries you around.
+      if (p.mode === 'ridden') {
+        if (this.rider) {
+          p.mesh.position.set(this.rider.x, 0.2 + Math.sin(t * 2) * 0.08, this.rider.z);
+          p.mesh.rotation.y = this.rider.yaw;
+        }
+        for (const w of u.wings) w.rotation.z = Math.sin(t * 9 + u.phase) * 0.55 * w.userData.wing;
+        return;
+      }
+
+      // A hound drops everything to run down a fleeing gnome.
+      const hunting = this.chase && p.spec.ability === 'gnome' && !called && p.mode !== 'eat';
       if (called && p.mode !== 'eat') p.mode = 'come';
-      if (p.mode === 'come') {
+      else if (hunting) p.mode = 'chase';
+      else if (p.mode === 'chase') { p.mode = 'roam'; this.pickRoamTarget(p); }
+
+      if (p.mode === 'chase') {
+        p.target = { x: this.chase.x, z: this.chase.z };
+      } else if (p.mode === 'come') {
         // Gather in a ring in front of the gardener so they stay in view.
         const a = playerYaw + Math.PI + (i - (this.pets.length - 1) / 2) * 0.6;
         p.target = { x: playerPos.x + Math.sin(a) * 2.2, z: playerPos.z + Math.cos(a) * 2.2 };
@@ -241,8 +300,8 @@ export class PetPack {
       const dx = p.target.x - p.mesh.position.x;
       const dz = p.target.z - p.mesh.position.z;
       const dist = Math.hypot(dx, dz);
-      const stop = p.mode === 'come' ? 0.5 : 0.35;
-      const speed = (p.mode === 'come' ? 4.2 : 1.5) * (1 + happy * 0.35);
+      const stop = p.mode === 'chase' ? 1.5 : p.mode === 'come' ? 0.5 : 0.35;
+      const speed = (p.mode === 'chase' ? 5.4 : p.mode === 'come' ? 4.2 : 1.5) * (1 + happy * 0.35);
 
       if (dist > stop) {
         p.mesh.position.x += (dx / dist) * speed * dt;
@@ -262,10 +321,21 @@ export class PetPack {
       const joy = p.hop > 0 ? Math.abs(Math.sin(p.hop * 12)) * 0.55 * p.hop : 0;
       p.mesh.position.y = base + hop + joy;
 
+      // A hound on the trail wags hard and yips along.
+      if (u.tail) u.tail.rotation.z = Math.sin(t * (p.mode === 'chase' ? 18 : 6) + u.phase) * (p.mode === 'chase' ? 0.7 : 0.25);
       for (const w of u.wings) w.rotation.z = Math.sin(t * (u.flyer ? 22 : 8) + u.phase) * 0.5 * w.userData.wing;
       for (const sp of u.spinners) sp.rotation.y += sp.userData.spin * dt;
     });
   }
+
+  /** The pet with this uid, if it is out. */
+  byUid(uid) { return this.pets.find(p => p.uid === uid) || null; }
+
+  /** Every mount that is out and not already being ridden. */
+  mounts() { return this.pets.filter(p => p.spec.mount); }
+
+  /** True while at least one hound is running a gnome down. */
+  get hunting() { return this.pets.some(p => p.mode === 'chase'); }
 
   clear() {
     for (const p of this.pets) this.scene.remove(p.mesh);

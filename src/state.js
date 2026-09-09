@@ -9,7 +9,7 @@ import { PLOT_COUNT, PLANTS_BY_ID, plotCost, plotLayout, LAYOUT_ID,
          UPGRADES, UPGRADES_BY_ID, upgradeCost, rankFor, dietBonus, dietSummary,
          DEFENCES_BY_ID, PROPS_BY_ID, HATS_BY_ID, OUTFITS_BY_ID,
          QUEST_BY_ID, today, rollQuests, questReward,
-         rollStock, RESTOCK_SECONDS } from './data.js';
+         rollStock, RESTOCK_SECONDS, weaponDamageMult, weaponUpgradeCost } from './data.js';
 
 const SAVE_KEY = 'sheckle-garden-save-v1';
 export const SAVE_VERSION = 2;
@@ -26,6 +26,7 @@ function freshState() {
     sprinklers: new Array(PLOT_COUNT).fill(null), // sprinkler id sitting on each plot
     turrets: new Array(PLOT_COUNT).fill(null),    // turret id sitting on each plot
     weapons: {},                                  // weapons owned
+    weaponLevels: {},                             // per-weapon upgrade levels
     nextRaid: 0,                                  // when the next bug raid is due
     stock: {},                                    // sprinklers bought but not yet placed
     cans: {},                                     // watering cans owned
@@ -71,6 +72,10 @@ function sanitize(raw) {
   s.owned = Number.isFinite(raw.owned) ? Math.min(PLOT_COUNT, Math.max(1, Math.floor(raw.owned))) : base.owned;
   s.stats = { ...base.stats, ...(raw.stats || {}) };
   s.caveFound = !!raw.caveFound;
+  s.weaponLevels = {};
+  for (const [id, n] of Object.entries(raw.weaponLevels || {})) {
+    if (WEAPONS_BY_ID[id] && Number.isFinite(n) && n > 0) s.weaponLevels[id] = Math.floor(n);
+  }
   s.caveUntil = Number.isFinite(raw.caveUntil) ? raw.caveUntil : 0;
 
   s.seeds = {};
@@ -335,6 +340,19 @@ export function luckMultiplier() {
 }
 
 export function rank() { return rankFor(state.stats.earned); }
+
+// ---- weapon upgrades --------------------------------------------------
+
+export function weaponLevel(id) { return state.weaponLevels[id] || 0; }
+
+/** Damage a weapon actually does, after its own upgrades. */
+export function weaponDamage(weapon) {
+  return weapon.damage * weaponDamageMult(weaponLevel(weapon.id));
+}
+
+export function nextWeaponCost(weapon) {
+  return weaponUpgradeCost(weapon, weaponLevel(weapon.id));
+}
 
 // ---- seed shop stock --------------------------------------------------
 

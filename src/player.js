@@ -33,6 +33,8 @@ export class Player {
     scene.add(camera);
 
     this.bounds = { x: 0, z: 0, r: WORLD_RADIUS };   // where you can walk
+    this.riding = null;      // the mount you are sitting on, if any
+    this.rideHeight = 0;
     this.shovel = false;
     this.can = false;
     this.digging = 0;
@@ -160,7 +162,7 @@ export class Player {
 
   /** World-space point the player's eyes sit at. */
   headPosition(out = new THREE.Vector3()) {
-    return out.set(this.pos.x, this.pos.y + EYE, this.pos.z);
+    return out.set(this.pos.x, this.pos.y + EYE + this.rideHeight, this.pos.z);
   }
 
   /** Unit vector the player is looking along. */
@@ -193,7 +195,7 @@ export class Player {
     let len = Math.hypot(fx, fz);
     if (len > 1) { fx /= len; fz /= len; len = 1; }
     const sprinting = k.has('ShiftLeft') || k.has('ShiftRight') || !!pad?.sprint;
-    const speed = sprinting ? SPRINT : WALK;
+    const speed = (sprinting ? SPRINT : WALK) * (this.riding ? 1.9 : 1);
 
     if (len > 0.01) {
       // Forward is (sin yaw, cos yaw); right is forward x up = (-cos yaw, sin yaw).
@@ -224,6 +226,7 @@ export class Player {
     if (this.pos.y <= 0) { this.pos.y = 0; this.vy = 0; this.grounded = true; }
 
     this.model.position.copy(this.pos);
+    this.model.position.y += this.rideHeight;
     this.model.visible = this.view === 'third';
     this.fpShovel.visible = this.shovel && this.view === 'first';
     if (this.heldGun) this.heldGun.visible = !!this.weapon && this.view === 'third';
@@ -248,6 +251,12 @@ export class Player {
     animateGardener(this.model, dt, this.speed01, this.grounded, t, this.digging, this.swing);
 
     this.updateCamera(dt);
+  }
+
+  /** Climb onto a mount (or drop off again). Riding is faster and taller. */
+  setRiding(mount) {
+    this.riding = mount;
+    this.rideHeight = mount ? 1.5 : 0;
   }
 
   /** Where the gardener may walk: a disc around a point. */

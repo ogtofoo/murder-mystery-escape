@@ -190,14 +190,17 @@ function buildStall() {
   stripes.rotation.x = -0.14;
   g.add(stripes);
 
-  const sign = new THREE.Mesh(
-    new THREE.PlaneGeometry(3.4, 0.9),
-    new THREE.MeshBasicMaterial({ map: signTexture(), transparent: true, side: THREE.DoubleSide })
-  );
-  // The stall is turned to face the garden, so the sign faces +Z locally.
-  // Rotating it would mirror the lettering — leave it be.
+  // Two single-sided boards back to back. One double-sided plane would read
+  // backwards from behind, so each face gets its own copy of the lettering.
+  const board = new THREE.PlaneGeometry(3.4, 0.9);
+  const signFace = () => new THREE.MeshBasicMaterial({ map: signTexture(), transparent: true });
+  const sign = new THREE.Mesh(board, signFace());
   sign.position.set(0, 1.95, 0.62);
   g.add(sign);
+  const signBack = new THREE.Mesh(board, signFace());
+  signBack.position.set(0, 1.95, 0.58);
+  signBack.rotation.y = Math.PI;
+  g.add(signBack);
 
   // Crates of seed packs on the counter.
   for (let i = 0; i < 3; i++) {

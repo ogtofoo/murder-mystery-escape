@@ -21,11 +21,12 @@ python3 -m http.server 8777
 | Mouse | Look (click the page to capture the pointer; click-drag also works) |
 | Wheel | Zoom the third-person camera |
 | `Shift` / `Space` | Sprint / jump |
-| `E` or left click | Plant, harvest, till a new plot, open the shop at the stall |
+| `E` or left click | Plant, harvest, till a new plot, open the shop at the stall — or breathe frost while riding |
 | `1`–`9` / `Q` | Pick a seed from the hotbar |
 | `G` | Take out / put away the shovel |
 | Hold `E` | With the shovel out: dig up the plant you're looking at |
 | `C` / `T` | Whistle your pets over / feed the nearest one a seed |
+| `Y` | Climb on or off your **Frost Wyrm** (once the Ice Lair has given you one) |
 | `B` | Seed shop (seeds, packs, almanac) |
 | `V` | Toggle **first person ↔ third person** (first person uses a wider 90° field of view) |
 | `Esc` | Close the shop / back to the menu |
@@ -210,9 +211,17 @@ about 14m of him when he gets there and the boulder rolls aside: you've found hi
 and it stays found forever (the **Secret Keeper** trophy). Until you've found it, every third
 thief is a gnome so you get plenty of chances.
 
+The fastest way to meet one is the **Gnome Hound** — a legendary pet that barks a gnome out of the
+hedgerow at any hour (no waiting for nightfall), then sprints after him when he runs, so you can
+simply follow the dog. See the Pets section.
+
 While a gnome is running home the top of the screen shows how far away he is. He waits at his
 door for about seven seconds fumbling with the boulder, so you only need to be within 22m of him
 before that runs out — and if you weren't, the game tells you how far behind you were.
+
+Once you've found the lair, chasing a gnome all the way to his door while it is still on cooldown
+makes him leave the boulder rolled aside — **the lair reopens immediately**. With a hound out, that
+turns a 20 minute wait into another run.
 
 **Testing tip:** open the game as `http://localhost:8777/?gnome` and a gnome turns up a few seconds
 after you press Play and keeps coming — day or night, ripe crops or not — until you take `?gnome`
@@ -225,15 +234,16 @@ of every MEGA bug you know from raids, ending with one that only lives down here
 | Wave | Bosses |
 | --- | --- |
 | 1 | MEGA APHID |
-| 2 | MEGA LEAF BEETLE + MEGA APHID |
-| 3 | MEGA LOCUST × 2 |
-| 4 | MEGA ROOT GRUB + MEGA LEAF BEETLE |
-| 5 | MEGA VOID MANTIS + MEGA LOCUST |
-| 6 | MEGA TITAN WEEVIL + MEGA VOID MANTIS |
-| 7 | **FROST TITAN** (3× a MEGA Titan) + two MEGA APHIDs |
+| 2 | MEGA JUMP SPIDER + MEGA APHID |
+| 3 | MEGA LOCUST + MEGA JUMP SPIDER |
+| 4 | MEGA SAND SCORPION + MEGA LEAF BEETLE |
+| 5 | MEGA VOID MANTIS + MEGA ACID SPITTER |
+| 6 | MEGA TITAN WEEVIL + MEGA SAND SCORPION |
+| 7 | **FROST TITAN** (3× a MEGA Titan) + MEGA ACID SPITTER + MEGA JUMP SPIDER |
 
-Down here the bosses hunt **you**, not your crops. There's no health bar to lose — instead each
-wave has a **75 second clock**, and every bite knocks **4 seconds** off it (and shoves you back).
+Down here the bosses hunt **you**, not your crops, and each species comes at you its own way — see
+**Bugs that fight back** below. There's no health bar to lose. Instead each wave has a **75 second
+clock**, and every hit knocks time off it: a bite costs 4 seconds, a pounce 6, a sting 9.
 Kill everything before the clock runs out and the next wave comes after a short breather. Run out
 of time and the lair freezes over: you keep everything you've already won and get thrown out.
 You can walk out through the glowing arch at any time.
@@ -249,8 +259,15 @@ Rewards stack up fast:
   and the **Lair Raider** trophy — which unlocks the **Frost Crown** in the wardrobe. Ten clears
   is the **Frost King** trophy.
 
-Each clear makes the lair one level **deeper**: every boss has 1.3× the health and every reward
-pays 25% more, with no ceiling. The lair closes for 20 minutes after a clear (8 minutes if you
+**The levels never end.** Each clear makes the lair one **Level** deeper: every boss gets 1.3× the
+health and every payout 1.45× bigger, forever. Since the rewards climb faster than the health, a
+deep lair is where the real money is — as long as you keep upgrading your weapon.
+
+**Level 20** is the prize: clear it and the lair hands over a **Frost Wyrm** — a pet big enough to
+*ride*. Press **Y** to climb on. Riding is nearly twice as fast, you sit high above the crops, and
+**E** breathes a 12m cone of frost instead of firing your weapon. The breath does millions of
+damage and climbs 55% per wyrm level, so it just keeps up as the lair gets deeper. Press **Y**
+again to hop down. The wyrm never hatches from an egg — Level 20 is the only way to get one. The lair closes for 20 minutes after a clear (8 minutes if you
 froze out or left early), and raids, thieves and drake lures are all paused while you're
 underground — your garden keeps growing, and your pets come down with you.
 
@@ -302,7 +319,8 @@ A plain tomato sells for ₪180. A Rainbow Shocked one sells for ₪450,000.
 
 ### 🐾 Pets
 
-Buy an egg, keep gardening, and it hatches on its own into one of ten companions. **Keep as
+Buy an egg, keep gardening, and it hatches on its own into one of eleven companions (a twelfth,
+the Frost Wyrm, is won rather than hatched). **Keep as
 many out as you like** — they wander your garden on their own rather than trailing behind you,
 so you can actually watch them potter about. Press `C` to whistle and they all come running.
 
@@ -313,6 +331,13 @@ slowly, so it's worth topping up. It's also a good use for the drawer full of co
 
 Pets level up just by being out, and every level makes their ability stronger.
 
+The **Gnome Hound** is the odd one out: instead of helping the garden it works against it a
+little, calling a crop-stealing Garden Gnome out of the hedgerow every couple of minutes at
+level 1 (faster with more hounds and higher levels, with no ceiling). That's the point — gnomes
+are the only way to find the **Ice Lair**, and the only way to reopen it early. The moment a
+gnome turns and runs, every hound you own drops what it's doing and tears after him, barking,
+so you can find him just by watching the dog.
+
 | Pet | Tier | Does |
 | --- | --- | --- |
 | Garden Snail | Common | Growth speed |
@@ -321,10 +346,12 @@ Pets level up just by being out, and every level makes their ability stronger.
 | Bunny | Rare | Auto-picks ripe crops near you |
 | Barn Cat | Rare | Crop value |
 | Fox | Legendary | Auto-picks, wider |
+| Gnome Hound | Legendary | **Barks gnomes in** and chases them home — your ride to the Ice Lair |
 | Wise Owl | Mythic | Mutation luck ++ |
 | Baby Drake | Prismatic | **Roars bugs in** — feeds your carnivores |
 | Phoenix Chick | Transcendent | Crop value +++ |
 | Star Sprite | SUPER | Mutation luck ×5.5 per level |
+| Frost Wyrm | CARNIVORE | **Rideable** — press Y. Not from an egg: clear Ice Lair Level 20 |
 
 A level-10 Star Sprite multiplies your mutation luck by 46 — Rainbow crops stop being a
 once-a-week event.
@@ -377,6 +404,18 @@ Every fourth raid sends a boss instead of a swarm: one enormous horned bug with 
 its own health bar across the top of the screen, and a bounty 70× the usual. Beating your first
 one is a trophy; beating ten is a much bigger one.
 
+### 🦂 Bugs that fight back
+
+Three species don't just chew — they attack, and each one needs a different answer:
+
+| Bug | Level | How it fights |
+| --- | --- | --- |
+| Jump Spider | 3 | Winds up and **pounces** on you from 11m away — costs 6 seconds in the lair |
+| Sand Scorpion | 4 | Walks right up and **stings** with its tail — the biggest hit at 9 seconds |
+| Acid Spitter | 5 | Hangs back at 10m and **spits acid globs** — small hits, but constant, and you have to close the distance |
+
+They turn up in ordinary raids too, and their MEGA versions headline the Ice Lair waves.
+
 ### Bugs, weapons and turrets
 
 Every few minutes a **bug raid** crosses the field toward your crops. A bug that reaches a plot
@@ -409,6 +448,15 @@ not. They are deliberately expensive.
 | SUPER | ₪50Qa | 650K | 4/s | the whole garden |
 
 The shovel lifts a turret back into your shed, same as a sprinkler.
+
+### 🔧 Upgrading weapons
+
+Every weapon you own can be upgraded in the **Tools** tab, forever. Each level is **+30% damage**
+for a cost that climbs 2.35× a level, so the Bug Swatter you bought for ₪2,000 can still be doing
+useful damage a thousand levels into the Ice Lair. Upgrades are per weapon and are saved.
+
+Garden Mastery's **Venom Tips** stacks on top of that, adding +30% to weapons *and* turrets per
+level.
 
 ### The shovel
 
