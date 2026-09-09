@@ -203,9 +203,11 @@ export class ThiefPack {
     if (killed) this.hooks.onCaught?.(th);
   }
 
-  nearest(x, z, radius) {
+  /** @param filter optional predicate — turrets use it to leave gnomes alone */
+  nearest(x, z, radius, filter = null) {
     let best = null, bestD = radius;
     for (const th of this.thieves) {
+      if (filter && !filter(th)) continue;
       const d = Math.hypot(th.mesh.position.x - x, th.mesh.position.z - z);
       if (d < bestD) { best = th; bestD = d; }
     }

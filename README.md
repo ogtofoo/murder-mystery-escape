@@ -202,7 +202,9 @@ nothing worth stealing.
 
 ### ❄️ The Gnome's Ice Lair
 
-Don't catch the **Garden Gnome** — **follow him**. When a gnome runs off with your crop (or gets
+Don't catch the **Garden Gnome** — **follow him**. Turrets can't track a gnome (too short, too
+sneaky), so he'll always make it out of a fortified garden; traps and guard cacti still hurt him,
+and you can always swat him yourself if you'd rather have the bounty. When a gnome runs off with your crop (or gets
 scared off), he heads for a rocky mound out by the hills instead of the fence. Stay within
 about 14m of him when he gets there and the boulder rolls aside: you've found his secret lair,
 and it stays found forever (the **Secret Keeper** trophy). Until you've found it, every third

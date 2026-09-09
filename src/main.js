@@ -1334,8 +1334,10 @@ function updateTurrets(dt) {
     const view = world.plots[i];
     if (!view.turret) continue;
     const spec = view.turret.userData.spec;
+    // Gnomes are too short and too sneaky for turrets to track — you have to
+    // deal with them yourself, and following one home is the smarter play.
     const target = bugs.nearest(view.x, view.z, spec.range)
-      || thieves.nearest(view.x, view.z, spec.range);
+      || thieves.nearest(view.x, view.z, spec.range, th => !th.spec.greedy);
     animateTurret(view.turret, dt, target?.mesh.position);
     view.turret.userData.cooldown -= dt;
     if (target && view.turret.userData.cooldown <= 0) {
