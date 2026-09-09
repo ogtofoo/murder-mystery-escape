@@ -198,8 +198,21 @@ export class PetPack {
   pickRoamTarget(p) {
     const a = Math.random() * Math.PI * 2;
     const r = Math.sqrt(Math.random()) * this.roamRadius;
-    p.target = { x: Math.cos(a) * r, z: Math.sin(a) * r };
+    const c = this.center || { x: 0, z: 0 };
+    p.target = { x: c.x + Math.cos(a) * r, z: c.z + Math.sin(a) * r };
     p.wait = 1.5 + Math.random() * 4;
+  }
+
+  /** Move the whole pack somewhere new (into the lair and back) and roam around it. */
+  relocate(center, x, z) {
+    this.center = center;
+    this.pets.forEach((p, i) => {
+      const a = (i / Math.max(1, this.pets.length)) * Math.PI * 2;
+      p.mesh.position.set(x + Math.cos(a) * 2.5, p.mesh.position.y, z + Math.sin(a) * 2.5);
+      p.target = null;
+      p.mode = 'roam';
+      p.wait = 0;
+    });
   }
 
   /**

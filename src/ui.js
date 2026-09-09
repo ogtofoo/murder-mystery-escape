@@ -34,7 +34,7 @@ export class UI {
       shop: $('#shop'), body: $('#shopbody'), overlay: $('#overlay'), plotline: $('#plotline'),
       packmodal: $('#packmodal'), packcards: $('#packcards'), packtitle: $('#packtitle'),
       bossbar: $('#bossbar'), goldenline: $('#goldenline'), skyline: $('#skyline'),
-      rankline: $('#rankline'), eggline: $('#eggline'),
+      rankline: $('#rankline'), eggline: $('#eggline'), cavebar: $('#cavebar'),
     };
 
     $('#playbtn').addEventListener('click', () => this.hooks.play());
@@ -137,6 +137,14 @@ export class UI {
     this.el.bossbar.querySelector('.bossname').textContent = boss.name;
     this.el.bossbar.querySelector('.bosstrack i').style.width =
       `${Math.max(0, (boss.hp / boss.maxHp) * 100)}%`;
+  }
+
+  /** The lair's wave and clock, top centre. Pass '' to hide. */
+  setCave(text, hit = false) {
+    const el = this.el.cavebar;
+    el.classList.toggle('hidden', !text);
+    el.classList.toggle('hit', hit);
+    if (text !== this.caveText) { this.caveText = text; el.textContent = text; }
   }
 
   /** Clock and weather in the corner. */

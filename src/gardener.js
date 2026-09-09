@@ -135,6 +135,22 @@ export function setHat(g, id) {
       }
       break;
     }
+    case 'frost': {
+      const ice = new THREE.MeshStandardMaterial({ color: c, emissive: 0x2fb8ff, emissiveIntensity: 0.5,
+        transparent: true, opacity: 0.9, flatShading: true, roughness: 0.2 });
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.045, 6, 12), ice);
+      band.rotation.x = Math.PI / 2;
+      band.position.y = 0.06;
+      hat.add(band);
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2;
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.16 + (i % 2) * 0.12, 5), ice);
+        spike.position.set(Math.cos(a) * 0.18, 0.1 + (i % 2) * 0.06, Math.sin(a) * 0.18);
+        spike.rotation.set(Math.sin(a) * 0.25, 0, -Math.cos(a) * 0.25);
+        hat.add(spike);
+      }
+      break;
+    }
     case 'halo': {
       const ring = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.035, 6, 14),
         new THREE.MeshBasicMaterial({ color: c }));

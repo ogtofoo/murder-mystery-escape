@@ -126,6 +126,18 @@ export class Sky {
 
   /** @param player world position, so precipitation follows you around */
   update(dt, phase, player) {
+    if (this.indoor) {
+      // Underground: no sky, no weather. The cave paints its own light.
+      this.drops.visible = false;
+      this.moonGlow.intensity = 0;
+      this.bolt.intensity = 0;
+      this.stars.material.opacity = 0;
+      this.rainbow.visible = false;
+      this.sunDisc.visible = this.moonDisc.visible = false;
+      for (const m of this.curtains || []) m.visible = false;
+      for (const mt of this.meteors) mt.visible = false;
+      return;
+    }
     const c = blend(phase);
     const spec = this.spec;
     const storm = this.weather === 'storm';

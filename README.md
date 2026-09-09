@@ -200,6 +200,53 @@ Catch one — with a weapon, a turret, a trap or a guard crop — and it pays a 
 The simplest defence is still to harvest promptly — a garden with nothing ripe in it has
 nothing worth stealing.
 
+### ❄️ The Gnome's Ice Lair
+
+Don't catch the **Garden Gnome** — **follow him**. When a gnome runs off with your crop (or gets
+scared off), he heads for a rocky mound out by the hills instead of the fence. Stay within
+about 14m of him when he gets there and the boulder rolls aside: you've found his secret lair,
+and it stays found forever (the **Secret Keeper** trophy). Until you've found it, every third
+thief is a gnome so you get plenty of chances.
+
+Press **E** at the glowing cave mouth to go in. Inside is a huge ice cavern — crystal spires,
+stalactites, drifting snow, the gnome's frozen throne and his hoard of coins — and a **boss rush**
+of every MEGA bug you know from raids, ending with one that only lives down here:
+
+| Wave | Bosses |
+| --- | --- |
+| 1 | MEGA APHID |
+| 2 | MEGA LEAF BEETLE + MEGA APHID |
+| 3 | MEGA LOCUST × 2 |
+| 4 | MEGA ROOT GRUB + MEGA LEAF BEETLE |
+| 5 | MEGA VOID MANTIS + MEGA LOCUST |
+| 6 | MEGA TITAN WEEVIL + MEGA VOID MANTIS |
+| 7 | **FROST TITAN** (3× a MEGA Titan) + two MEGA APHIDs |
+
+Down here the bosses hunt **you**, not your crops. There's no health bar to lose — instead each
+wave has a **75 second clock**, and every bite knocks **4 seconds** off it (and shoves you back).
+Kill everything before the clock runs out and the next wave comes after a short breather. Run out
+of time and the lair freezes over: you keep everything you've already won and get thrown out.
+You can walk out through the glowing arch at any time.
+
+Rewards stack up fast:
+
+- Every boss pays its usual MEGA bounty.
+- Every wave cleared pays a windfall that scales with your **lifetime earnings** and doubles each
+  wave (a full clear is worth roughly a third of everything you've ever earned).
+- **Wave 2** cracks open a free seed pack, **wave 4** thaws out a free egg, **wave 6** drops
+  three SUPER seeds.
+- **Clearing all seven** pays Golden Seeds (10, +5 per depth), a guaranteed **CARNIVORE seed**,
+  and the **Lair Raider** trophy — which unlocks the **Frost Crown** in the wardrobe. Ten clears
+  is the **Frost King** trophy.
+
+Each clear makes the lair one level **deeper**: every boss has 1.3× the health and every reward
+pays 25% more, with no ceiling. The lair closes for 20 minutes after a clear (8 minutes if you
+froze out or left early), and raids, thieves and drake lures are all paused while you're
+underground — your garden keeps growing, and your pets come down with you.
+
+The deep waves need serious firepower, so Garden Mastery now has **Venom Tips**: +30% weapon and
+turret damage per level, forever.
+
 ### 🏡 Decorations
 
 A **Garden** tab of things to place wherever you like on the grass: fence panels, stone paths,
@@ -274,8 +321,8 @@ once-a-week event.
 
 ### ⬆ Garden Mastery
 
-Five permanent upgrades with **no level cap**, so sheckles always have somewhere to go: growth
-speed, crop value, mutation luck, bug bounty and Golden Seed gain. Costs roughly double each
+Six permanent upgrades with **no level cap**, so sheckles always have somewhere to go: growth
+speed, crop value, mutation luck, bug bounty, Golden Seed gain and weapon damage. Costs roughly double each
 level, running from millions into the sextillions. They survive a Golden Harvest.
 
 ### 📋 Daily quests
@@ -310,8 +357,8 @@ and the third flies by faster still.
 
 ### 🏆 Trophies
 
-Sixteen goals with rewards paid the instant you finish them — harvest counts, land, species
-discovered, bugs squashed, MEGA bugs beaten, sprinklers and turrets running, and Golden
+Thirty-two goals with rewards paid the instant you finish them — harvest counts, land, species
+discovered, bugs squashed, MEGA bugs beaten, thieves caught, the Ice Lair found and cleared, and Golden
 Harvests done. The **Trophies** tab shows a progress bar for every one still open.
 
 ### 💀 MEGA bugs

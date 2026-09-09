@@ -93,10 +93,11 @@ export class ThiefPack {
   get count() { return this.thieves.length; }
 
   /** Send one in. Returns null when there is nothing worth taking. */
-  spawn(ownedPlots, prestiges) {
+  /** @param forceId spawn this species instead of rolling one */
+  spawn(ownedPlots, prestiges, forceId = null) {
     const ripe = this.hooks.ripePlots();
     if (!ripe.length) return null;
-    const spec = rollThief();
+    const spec = THIEVES_BY_ID[forceId] || rollThief();
     // A gnome goes for the most valuable thing in the garden; the rest grab anything.
     const target = spec.greedy
       ? ripe.reduce((best, i) => (this.hooks.valueOf(i) > this.hooks.valueOf(best) ? i : best), ripe[0])
@@ -141,16 +142,27 @@ export class ThiefPack {
         if (th.timer <= 0) {
           const took = this.hooks.onSteal(th.target, th.spec.loot);
           th.carrying = took;
-          th.mode = 'flee';
           if (!took) this.scare(th, true);
+          else this.flee(th);
         }
       } else {
-        // Running for the fence with the goods.
-        const away = Math.atan2(th.mesh.position.x, th.mesh.position.z);
-        th.mesh.position.x += Math.sin(away) * th.spec.speed * 1.4 * dt;
-        th.mesh.position.z += Math.cos(away) * th.spec.speed * 1.4 * dt;
-        th.mesh.rotation.y = away;
-        if (Math.hypot(th.mesh.position.x, th.mesh.position.z) > ENTER_FROM) { this.remove(th); continue; }
+        // A gnome runs home to his lair; everyone else runs for the fence.
+        const home = th.spec.greedy ? this.hooks.home?.() : null;
+        if (home) {
+          const dx = home.x - th.mesh.position.x, dz = home.z - th.mesh.position.z;
+          const d = Math.hypot(dx, dz);
+          if (d < 1.4) { this.hooks.onHome?.(th); this.remove(th); continue; }
+          const v = th.spec.speed * 1.4 * dt;
+          th.mesh.position.x += (dx / d) * v;
+          th.mesh.position.z += (dz / d) * v;
+          th.mesh.rotation.y = Math.atan2(dx, dz);
+        } else {
+          const away = Math.atan2(th.mesh.position.x, th.mesh.position.z);
+          th.mesh.position.x += Math.sin(away) * th.spec.speed * 1.4 * dt;
+          th.mesh.position.z += Math.cos(away) * th.spec.speed * 1.4 * dt;
+          th.mesh.rotation.y = away;
+          if (Math.hypot(th.mesh.position.x, th.mesh.position.z) > ENTER_FROM) { this.remove(th); continue; }
+        }
       }
 
       // Traps bite whatever wanders over them.
@@ -165,9 +177,16 @@ export class ThiefPack {
 
   /** Frighten one off empty-handed. */
   scare(th, atPlot = false) {
-    th.mode = 'flee';
     th.carrying = 0;
     this.hooks.onScared?.(th, atPlot);
+    this.flee(th);
+  }
+
+  /** Turn and run, telling the game once. */
+  flee(th) {
+    if (th.mode === 'flee') return;
+    th.mode = 'flee';
+    this.hooks.onFlee?.(th);
   }
 
   damage(th, amount) {

@@ -1,13 +1,13 @@
 // Sheckle Garden — entry point: loop, interaction, economy glue.
 
 import * as THREE from 'three';
-import { PLANTS_BY_ID, PACKS, TIERS, fmt, rollPack, plotCost, PLOT_COUNT, refundValue, SEED_REFUND,
+import { PLANTS, PLANTS_BY_ID, PACKS, EGGS, TIERS, fmt, rollPack, plotCost, PLOT_COUNT, refundValue, SEED_REFUND,
          CANS_BY_ID, SPRINKLERS_BY_ID, TURRETS_BY_ID, WEAPONS_BY_ID, plotLayout,
          raidLevel, BUG_SLOW, TROPHIES, goldenMultiplier, WEATHERS, rollWeather, rollMutation,
          mutationMultiplier, mutationName, mutationColor,
          PETS_BY_ID, PET_SLOTS, PET_MAX_LEVEL, petXpFor, EGGS_BY_ID, rollPet, moodOf, TREAT_VALUE, lureRate,
          UPGRADES_BY_ID, upgradeCost, dietSummary, dietBonus, bugBite, PLANT_REGEN_PER_SEC,
-         DEFENCES_BY_ID, PROPS_BY_ID, HATS_BY_ID, OUTFITS_BY_ID, mutationScale, WEATHERS as WX } from './data.js';
+         DEFENCES_BY_ID, PROPS_BY_ID, HATS_BY_ID, OUTFITS_BY_ID, mutationScale, WEATHERS as WX, BUGS_BY_ID } from './data.js';
 import { state, save, resetSave, exportSave, importSave, addSeed, takeSeed, spend, earn, seedCount,
          growth, isRipe, isRegrowing, harvestsLeft, cycleSeconds,
          refreshSprinklers, plotSpeed, sprinklerSpeed, sprinklerAt, stockCount, addSprinkler, takeSprinkler,
@@ -34,6 +34,8 @@ import { ThiefPack } from './thieves.js';
 import { buildProp, litProp } from './props.js';
 import { renderPadTest } from './padtest.js';
 import { BUILD_LABEL } from './build.js';
+import { buildCave, buildMouth, Lair, CAVE_ORIGIN, CAVE_RADIUS, FOLLOW_RANGE, WAVES,
+         CAVE_COOLDOWN, CAVE_RETRY, goldenReward } from './cave.js';
 
 let menuSuppressUntil = 0;
 let escClosedShop = false;
@@ -376,6 +378,11 @@ function buyPack(packId) {
   const pack = PACKS.find(p => p.id === packId);
   if (!pack) return;
   if (!spend(pack.cost)) { ui.toast('That pack is out of your league — for now.', 'bad'); sfx.deny(); return; }
+  openPack(pack);
+}
+
+/** Roll a pack and show the cards — bought, or won in the lair. */
+function openPack(pack) {
   const rolled = rollPack(pack);
   const firstTime = new Set(rolled.filter(id => !state.discovered[id]));
   for (const id of rolled) addSeed(id, 1);
@@ -807,7 +814,7 @@ function updatePets(dt, t) {
   const happiness = {};
   for (const p of state.pets) happiness[p.uid] = p.happy || 0;
   petPack.update(dt, t, player.pos, player.yaw, performance.now() < petCallUntil, happiness);
-  updateLure(dt);
+  if (!lair.inside) updateLure(dt);
 
   petClock += dt;
   if (petClock < 1) return;
@@ -879,6 +886,24 @@ const thieves = new ThiefPack(scene, {
   onScared: (th, atPlot) => {
     ui.toast(`${atPlot ? '😤' : '😱'} A ${th.spec.name} turned tail${atPlot ? ' empty-handed' : ''}.`);
   },
+  home: () => mouth.front,
+  onFlee: th => {
+    if (!th.spec.greedy) return;
+    ui.toast(state.caveFound
+      ? '🧙 The gnome bolts for his ice lair!'
+      : '🧙 The gnome is scurrying off somewhere — <b>follow him!</b>', 'gold');
+  },
+  onHome: th => {
+    const d = Math.hypot(player.pos.x - th.mesh.position.x, player.pos.z - th.mesh.position.z);
+    if (state.caveFound || d > FOLLOW_RANGE) return;
+    state.caveFound = true;
+    mouth.setFound(true);
+    for (let i = 0; i < 6; i++) burst({ x: mouth.hole.x, z: mouth.hole.z }, 0x7fe4ff);
+    ui.toast('❄️ <b>You found the Gnome\'s Ice Lair!</b> The boulder rolls aside… press <b>E</b> at the cave to go in.', 'gold');
+    sfx.pack(7);
+    gamepad.rumble(0.7, 500);
+    save();
+  },
   onCaught: th => {
     const reward = Math.floor(th.maxHp * 40);
     earn(reward);
@@ -892,19 +917,23 @@ const thieves = new ThiefPack(scene, {
 });
 
 let thiefClock = 0;
+let thiefSpawns = 0;
 
 /** After dark, someone always fancies your crops. */
 function updateThieves(dt, t) {
   thieves.update(dt, t);
 
-  if (!isNight()) { thiefClock = 0; return; }
+  if (!isNight() || lair.inside) { thiefClock = 0; return; }
   thiefClock += dt;
   const every = Math.max(12, 40 - state.owned * 0.6);
   if (thiefClock < every) return;
   thiefClock = 0;
   if (thieves.count >= 6) return;
 
-  const th = thieves.spawn(state.owned, state.prestiges);
+  // Until you have found the lair, a gnome turns up often enough to be followed.
+  const force = !state.caveFound && thiefSpawns % 3 === 0 && !thieves.thieves.some(x => x.spec.greedy) ? 'gnome' : null;
+  const th = thieves.spawn(state.owned, state.prestiges, force);
+  if (th) thiefSpawns++;
   if (th) {
     ui.toast(`🌙 A <b>${th.spec.name}</b> is sneaking into the garden!`, 'bad');
     sfx.raid();
@@ -940,6 +969,22 @@ const bugs = new BugSystem(scene, {
   plantedPlots: () => state.plots.map((p, i) => (p ? i : -1)).filter(i => i >= 0),
   onAttach: (index, specId) => { addBug(index, specId); },
   onDetach: (index, specId) => { removeBug(index, specId); },
+  playerPos: () => player.pos,
+  onBite: bug => {
+    if (!lair.inside) return;
+    lair.bitten();
+    // Shoved back, and the clock takes the hit.
+    const dx = player.pos.x - bug.mesh.position.x, dz = player.pos.z - bug.mesh.position.z;
+    const d = Math.hypot(dx, dz) || 1;
+    player.pos.x += (dx / d) * 2.2;
+    player.pos.z += (dz / d) * 2.2;
+    player.vy = 4;
+    player.grounded = false;
+    caveHit = 0.5;
+    ui.toast(`🦷 <b>${bug.spec.name}</b> bit you — <b>−${4}s</b>`, 'bad');
+    sfx.deny();
+    gamepad.rumble(0.7, 220);
+  },
   onKill: bug => {
     earn(Math.floor(bug.spec.bounty * (1 + upgradeLevel('traps') * 0.2)));
     state.stats.bugsKilled++;
@@ -1005,8 +1050,117 @@ function startRaid() {
 }
 
 function updateRaids() {
+  if (lair.inside) return;
   if (!state.nextRaid) { scheduleRaid(true); return; }
   if (Date.now() >= state.nextRaid) startRaid();
+}
+
+// ---------------------------------------------------------------- the gnome's ice lair
+
+const cave = buildCave(scene);
+const mouth = buildMouth(scene, state.caveFound);
+player.obstacles.push(cave.dome);
+let caveHit = 0;
+
+const lair = new Lair(bugs, {
+  earned: () => state.stats.earned,
+  onWave: (n, ids) => {
+    const names = ids.map(id => (id === 'frost' ? 'FROST TITAN' : 'MEGA ' + BUGS_BY_ID[id].name.toUpperCase()));
+    ui.toast(`❄️ <b>Wave ${n}/${WAVES.length}</b> — ${names.join(' + ')} incoming!`, 'bad');
+    sfx.raid();
+    gamepad.rumble(0.6, 400);
+  },
+  onWaveClear: (n, reward) => {
+    earn(reward);
+    state.stats.caveWaves = (state.stats.caveWaves || 0) + 1;
+    burst({ x: player.pos.x, z: player.pos.z }, 0xffd54f);
+    ui.toast(`🏆 <b>Wave ${n} cleared!</b> <b class="coin">+₪${fmt(reward)}</b>`, 'gold');
+    sfx.pack(5);
+    // Every other wave drops something you can't just buy.
+    if (n === 2) {
+      const pack = [...PACKS].reverse().find(p => p.cost <= Math.max(PACKS[0].cost, state.stats.earned / 20)) || PACKS[0];
+      ui.toast(`🎁 The gnome's hoard coughs up a free <b>${pack.name}</b>!`, 'gold');
+      openPack(pack);
+    } else if (n === 4) {
+      const egg = [...EGGS].reverse().find(e => e.cost <= Math.max(EGGS[0].cost, state.stats.earned / 20)) || EGGS[0];
+      state.eggs.push({ id: egg.id, readyAt: Date.now() + egg.hatch * 500 });
+      ui.toast(`🥚 A frozen <b>${egg.name}</b> thaws in your pocket — hatching soon!`, 'gold');
+    } else if (n === 6) {
+      const supers = PLANTS.filter(p => p.tier === 'super');
+      const pick = supers[Math.floor(Math.random() * supers.length)];
+      addSeed(pick.id, 3);
+      ui.toast(`🌟 3 × <b>${pick.name}</b> seeds fall out of the ice!`, 'gold');
+    }
+    ui.refresh();
+    save();
+  },
+  onClear: depth => {
+    const gold = goldenReward(depth);
+    state.golden += gold;
+    state.stats.caveClears = (state.stats.caveClears || 0) + 1;
+    const carnivores = PLANTS.filter(p => p.carnivore);
+    const pick = carnivores[Math.floor(Math.random() * carnivores.length)];
+    addSeed(pick.id, 1);
+    for (let i = 0; i < 12; i++) burst({ x: player.pos.x + (Math.random() - 0.5) * 6, z: player.pos.z + (Math.random() - 0.5) * 6 }, 0x7fe4ff);
+    ui.toast(`👑 <b>LAIR CLEARED!</b> +${gold} Golden Seeds, a <b>${pick.name}</b> seed, and the lair goes deeper next time.`, 'gold');
+    sfx.pack(8);
+    gamepad.rumble(1, 900);
+    ui.refresh();
+    save();
+  },
+  onFreeze: cleared => {
+    ui.toast(`🧊 <b>The lair froze over.</b> ${cleared} wave${cleared === 1 ? '' : 's'} cleared — come back stronger!`, 'bad');
+    sfx.deny();
+    setTimeout(() => { if (lair.inside) leaveCave(); }, 2500);
+  },
+});
+
+function caveOpensIn() { return Math.max(0, state.caveUntil - Date.now()); }
+
+function enterCave() {
+  if (!state.caveFound || lair.inside) return;
+  const wait = caveOpensIn();
+  if (wait > 0) { ui.toast(`🧊 The lair is frozen shut — opens in ${clockish(wait)}.`, 'bad'); sfx.deny(); return; }
+  lair.enter(state.stats.caveClears || 0);
+  cave.group.visible = true;
+  sky.indoor = true;
+  scene.background = new THREE.Color(0x07111f);
+  scene.fog.color.setHex(0x0a1a2e);
+  scene.fog.near = 22;
+  scene.fog.far = 80;
+  world.sun.color.setHex(0x8fc8ff);
+  world.sun.intensity = 0.35;
+  world.hemi.color.setHex(0x5ea6ff);
+  world.hemi.groundColor.setHex(0x0b1b2e);
+  world.hemi.intensity = 0.55;
+  player.setBounds(CAVE_ORIGIN.x, CAVE_ORIGIN.z, CAVE_RADIUS);
+  player.teleport(cave.spawn.x, cave.spawn.z, cave.spawn.yaw);
+  petPack.relocate(CAVE_ORIGIN, player.pos.x, player.pos.z + 2);
+  if (!player.weapon && bestWeapon()) toggleWeapon(true);
+  ui.toast(`❄️ <b>The Gnome's Ice Lair</b> — bosses come in waves. Beat the clock, grab the loot, leave through the arch.`, 'gold');
+  sfx.weather();
+  gamepad.rumble(0.5, 300);
+}
+
+function leaveCave() {
+  if (!lair.inside) return;
+  const full = lair.phase === 'won';
+  const fought = lair.cleared > 0 || lair.phase === 'fight' || lair.phase === 'frozen';
+  lair.leave();
+  cave.group.visible = false;
+  state.caveUntil = Date.now() + (full ? CAVE_COOLDOWN : fought ? CAVE_RETRY : 60000);
+  sky.indoor = false;
+  player.setBounds(0, 0, 72);
+  player.teleport(mouth.front.x, mouth.front.z, mouth.facing);
+  petPack.relocate({ x: 0, z: 0 }, player.pos.x, player.pos.z);
+  ui.setCave('');
+  ui.toast(full ? '🌤️ Back in the garden, richer than you went in.' : '🌤️ Back in the garden.');
+  save();
+}
+
+function clockish(ms) {
+  const s = Math.ceil(ms / 1000);
+  return s >= 60 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s` : `${s}s`;
 }
 
 /**
@@ -1112,9 +1266,13 @@ function updatePlantBar(view, hp, max) {
 
 let fireCooldown = 0;
 
+/** Venom Tips: every level makes hand weapons and turrets hit harder. */
+function damageBoost() { return 1 + upgradeLevel('venom') * 0.3; }
+
 function fireWeapon() {
-  const w = WEAPONS_BY_ID[player.weapon];
-  if (!w || fireCooldown > 0) return;
+  const spec = WEAPONS_BY_ID[player.weapon];
+  if (!spec || fireCooldown > 0) return;
+  const w = { ...spec, damage: spec.damage * damageBoost() };
   fireCooldown = w.cooldown;
   player.swing = 1;
 
@@ -1184,8 +1342,8 @@ function updateTurrets(dt) {
       view.turret.userData.cooldown = 1 / spec.rate;
       const from = new THREE.Vector3(view.x, 1.0, view.z);
       tracer(scene, from, target.mesh.position.clone().setY(0.3), TIERS[spec.tier].color, effects, 0.045);
-      if (bugs.bugs.includes(target)) bugs.damage(target, spec.damage);
-      else thieves.damage(target, spec.damage);
+      if (bugs.bugs.includes(target)) bugs.damage(target, spec.damage * damageBoost());
+      else thieves.damage(target, spec.damage * damageBoost());
     }
   }
 }
@@ -1231,6 +1389,20 @@ function updatePrompt() {
       : `<span class="sub">${mood.icon} ${nearPet.spec.name} is ${mood.word} (${Math.round(owned?.happy || 0)}/100) — hold a seed and press T</span>`;
   }
   const show = html => ui.setPrompt(html ? html + petLine : petLine);
+  if (lair.inside) {
+    if (cave.nearExit(player.pos)) show(`<b>[E]</b> Leave the lair${lair.phase === 'fight' ? ' <span class="sub">(the run ends here)</span>' : ''}`);
+    else if (lair.phase === 'won') show(`<span class="sub">🏆 Lair cleared — head for the glowing arch</span>`);
+    else if (lair.phase === 'fight') show(`<span class="sub">Fight! Every bite costs you 4 seconds</span>`);
+    else show('');
+    return;
+  }
+  if (state.caveFound && mouth.near(player.pos)) {
+    const wait = caveOpensIn();
+    show(wait > 0
+      ? `🧊 The Ice Lair is frozen shut <span class="sub">opens in ${clockish(wait)}</span>`
+      : `<b>[E]</b> Enter the Gnome's Ice Lair <span class="sub">depth ${(state.stats.caveClears || 0) + 1} · ${WAVES.length} boss waves · big loot</span>`);
+    return;
+  }
   if (target >= 0) {
     const i = target;
     if (i >= state.owned) {
@@ -1343,6 +1515,8 @@ function updatePrompt() {
 
 function interact() {
   if (ui.modalOpen) return;
+  if (lair.inside) { if (cave.nearExit(player.pos)) leaveCave(); return; }
+  if (state.caveFound && mouth.near(player.pos)) { enterCave(); return; }
   if (target >= 0) {
     const i = target;
     if (i >= state.owned) { buyPlot(i); return; }
@@ -1644,7 +1818,12 @@ function tick() {
   updatePets(dt, t);
   updateWeather();
   const phase = dayPhase();
+  sky.indoor = lair.inside;
   sky.update(dt, phase, player.pos);
+  mouth.update(t);
+  if (lair.inside) { lair.update(dt); cave.update(dt, t); }
+  caveHit = Math.max(0, caveHit - dt);
+  ui.setCave(lair.inside ? lair.label() : '', caveHit > 0);
   if (sky.takeStrike()) sfx.thunder();
   ui.setSky(phase, state.weather);
   ui.setEggs(Date.now());
@@ -1656,11 +1835,11 @@ function tick() {
   fireCooldown = Math.max(0, fireCooldown - dt);
   if (player.weapon && using) fireWeapon();
   player.swing = Math.max(0, player.swing - dt * 4);
-  ui.setBugCount(bugs.count, thieves.count);
+  ui.setBugCount(lair.inside ? 0 : bugs.count, lair.inside ? 0 : thieves.count);
   const night = isNight(phase);
   for (const mesh of propMeshes.values()) litProp(mesh, night);
   for (const v of world.plots) if (v.defence) litProp(v.defence, night);
-  const boss = bugs.activeBoss;
+  const boss = lair.inside ? lair.strongest() : bugs.activeBoss;
   ui.setBoss(boss ? { name: boss.spec.name, hp: boss.hp, maxHp: boss.maxHp } : null);
   checkTrophies(dt);
   checkQuests(dt);
@@ -1723,7 +1902,7 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { build: BUILD_LABEL, sky, petPack, thieves, callPets, refreshQuests, refreshShelf, shelfCount, isNight, questDone, questProgress, claimQuest, updateCarnivores, updateLure, petPower,
+window.game = { build: BUILD_LABEL, sky, petPack, thieves, cave, mouth, lair, enterCave, leaveCave, openPack, callPets, refreshQuests, refreshShelf, shelfCount, isNight, questDone, questProgress, claimQuest, updateCarnivores, updateLure, petPower,
                 buyDefence, placeDefence, buyProp, placeProp, syncProps, updateThieves,
                 growth, isRipe, feedProgress, cropValue, fmt, PLANTS_BY_ID, feedNearestPet, doGoldenHarvest, updateWeather, sellDevice, buyEgg, hatchEgg, buyUpgrade, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
                 placeSprinkler, buyWeapon, buyTurret, placeTurret, bugs, startRaid, fireWeapon,

@@ -361,6 +361,7 @@ export const UPGRADES = [
   { id:'clover',  name:'Four-Leaf Field',hint:'+25% mutation luck per level', base:2e7,  scale:2.45, step:0.25 },
   { id:'traps',   name:'Steel Traps',    hint:'+20% bug bounty per level',    base:1e7,  scale:2.2,  step:0.20 },
   { id:'compost', name:'Golden Compost', hint:'+3% Golden Seeds per level',   base:1e9,  scale:2.6,  step:0.03 },
+  { id:'venom',   name:'Venom Tips',     hint:'+30% weapon & turret damage per level', base:5e8, scale:2.3, step:0.30 },
 ];
 export const UPGRADES_BY_ID = Object.fromEntries(UPGRADES.map(u => [u.id, u]));
 
@@ -379,6 +380,7 @@ export const HATS = [
   { id:'top',    name:'Top Hat',      cost:9e10,  color:0x263238 },
   { id:'wizard', name:'Wizard Hat',   cost:5e12,  color:0x5e35b1 },
   { id:'crown',  name:'Golden Crown', cost:0,     color:0xffd54f, needTrophy:'land36' },
+  { id:'frost',  name:'Frost Crown',  cost:0,     color:0x9fe8ff, needTrophy:'lair1' },
   { id:'halo',   name:'Halo',         cost:0,     color:0xfff59d, needTrophy:'rankgod' },
 ];
 export const HATS_BY_ID = Object.fromEntries(HATS.map(h => [h.id, h]));
@@ -665,6 +667,9 @@ export const TROPHIES = [
   { id:'pets10',    name:'Full Menagerie',   hint:'Hatch 10 pets',                   goal:10,    at:s => s.pets?.length || 0, reward:2e9 },
   { id:'mastery20', name:'Garden Mastery',   hint:'Buy 20 Mastery upgrade levels',   goal:20,    at:s => Object.values(s.upgrades || {}).reduce((a, b) => a + b, 0), reward:5e10 },
   { id:'rankgod',   name:'Garden God',       hint:'Earn ₪1 sextillion all-time',     goal:1e21,  at:s => s.stats.earned, reward:0, golden:250 },
+  { id:'lairfound', name:'Secret Keeper',    hint:"Follow a gnome to his ice lair",  goal:1,     at:s => (s.caveFound ? 1 : 0), reward:5e6 },
+  { id:'lair1',     name:'Lair Raider',      hint:'Clear the Ice Lair once',         goal:1,     at:s => s.stats.caveClears || 0, reward:0, golden:10 },
+  { id:'lair10',    name:'Frost King',       hint:'Clear the Ice Lair 10 times',     goal:10,    at:s => s.stats.caveClears || 0, reward:0, golden:120 },
   { id:'golden1',   name:'Golden Touch',     hint:'Do one Golden Harvest',          goal:1,     at:s => s.prestiges, reward:0, golden:5 },
   { id:'golden10',  name:'Living Legend',    hint:'Do 10 Golden Harvests',          goal:10,    at:s => s.prestiges, reward:0, golden:100 },
 ];

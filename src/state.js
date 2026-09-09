@@ -29,7 +29,9 @@ function freshState() {
     nextRaid: 0,                                  // when the next bug raid is due
     stock: {},                                    // sprinklers bought but not yet placed
     cans: {},                                     // watering cans owned
-    stats: { harvested: 0, earned: 0, packsOpened: 0, best: null, bugsKilled: 0, bossesKilled: 0 },
+    stats: { harvested: 0, earned: 0, packsOpened: 0, best: null, bugsKilled: 0, bossesKilled: 0, caveClears: 0, caveWaves: 0 },
+    caveFound: false,   // the gnome has shown you the way into his ice lair
+    caveUntil: 0,       // when the lair opens again
     golden: 0,          // Golden Seeds kept through every Golden Harvest
     prestiges: 0,       // how many times the garden has been replanted
     runEarned: 0,       // earnings since the last Golden Harvest
@@ -68,6 +70,8 @@ function sanitize(raw) {
   s.money = Number.isFinite(raw.money) ? Math.max(0, raw.money) : base.money;
   s.owned = Number.isFinite(raw.owned) ? Math.min(PLOT_COUNT, Math.max(1, Math.floor(raw.owned))) : base.owned;
   s.stats = { ...base.stats, ...(raw.stats || {}) };
+  s.caveFound = !!raw.caveFound;
+  s.caveUntil = Number.isFinite(raw.caveUntil) ? raw.caveUntil : 0;
 
   s.seeds = {};
   for (const [id, n] of Object.entries(raw.seeds || {})) {

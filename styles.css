@@ -90,6 +90,14 @@ kbd {
   color: #ffd9d2; border-radius: 12px; padding: 8px 18px; font-size: 15px;
   box-shadow: 0 8px 26px rgba(0,0,0,0.4); animation: pop 0.25s ease both;
 }
+#cavebar {
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+  background: rgba(8, 28, 52, 0.92); border: 1px solid rgba(127, 228, 255, 0.6);
+  color: #dff6ff; border-radius: 12px; padding: 8px 20px; font-size: 15px; font-weight: 700;
+  letter-spacing: 0.4px; box-shadow: 0 8px 26px rgba(0,0,0,0.45), 0 0 18px rgba(95, 208, 255, 0.35);
+  animation: pop 0.25s ease both; white-space: nowrap;
+}
+#cavebar.hit { background: rgba(120, 20, 30, 0.95); border-color: rgba(255,120,100,0.8); }
 #bossbar {
   position: absolute; top: 62px; left: 50%; transform: translateX(-50%);
   width: min(560px, 80vw); text-align: center;

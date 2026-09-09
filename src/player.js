@@ -32,6 +32,7 @@ export class Player {
     camera.add(this.fpShovel);
     scene.add(camera);
 
+    this.bounds = { x: 0, z: 0, r: WORLD_RADIUS };   // where you can walk
     this.shovel = false;
     this.can = false;
     this.digging = 0;
@@ -210,10 +211,11 @@ export class Player {
       if (this.view === 'first') this.model.rotation.y = this.yaw;
     }
 
-    const r = Math.hypot(this.pos.x, this.pos.z);
-    if (r > WORLD_RADIUS) {
-      this.pos.x *= WORLD_RADIUS / r;
-      this.pos.z *= WORLD_RADIUS / r;
+    const b = this.bounds;
+    const r = Math.hypot(this.pos.x - b.x, this.pos.z - b.z);
+    if (r > b.r) {
+      this.pos.x = b.x + (this.pos.x - b.x) * (b.r / r);
+      this.pos.z = b.z + (this.pos.z - b.z) * (b.r / r);
     }
 
     if (this.grounded && (k.has('Space') || pad?.jump)) { this.vy = JUMP; this.grounded = false; }
@@ -246,6 +248,21 @@ export class Player {
     animateGardener(this.model, dt, this.speed01, this.grounded, t, this.digging, this.swing);
 
     this.updateCamera(dt);
+  }
+
+  /** Where the gardener may walk: a disc around a point. */
+  setBounds(x, z, r) { this.bounds = { x, z, r }; }
+
+  /** Drop the gardener somewhere else, facing `yaw`, with the camera snapping along. */
+  teleport(x, z, yaw) {
+    this.pos.set(x, 0, z);
+    this.vy = 0;
+    this.grounded = true;
+    this.yaw = yaw;
+    this.pitch = -0.12;
+    this.model.position.copy(this.pos);
+    this.model.rotation.y = yaw;
+    this._first = true;
   }
 
   updateCamera(dt) {

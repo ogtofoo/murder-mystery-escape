@@ -79,7 +79,7 @@ function buildHealthBar() {
 }
 
 export class BugSystem {
-  /** @param hooks { plotCells, plantedPlots, onAttach, onDetach, onKill } */
+  /** @param hooks { plotCells, plantedPlots, onAttach, onDetach, onKill, playerPos, onBite } */
   constructor(scene, hooks) {
     this.scene = scene;
     this.hooks = hooks;
@@ -136,6 +136,27 @@ export class BugSystem {
     return bug;
   }
 
+  /**
+   * A bug that hunts the gardener instead of the crops — the lair's bosses.
+   * It never attaches to a plot; when it reaches you it bites.
+   */
+  spawnHunter(spec, x, z) {
+    const bug = this.spawn(spec, x, z, -1);
+    bug.hunter = true;
+    bug.biteCd = 1.2;
+    bug.bar.visible = false;
+    return bug;
+  }
+
+  /** Remove every arena bug without paying bounties. */
+  clearArena() {
+    for (const bug of [...this.bugs]) {
+      if (!bug.arena) continue;
+      this.bugs.splice(this.bugs.indexOf(bug), 1);
+      this.scene.remove(bug.mesh, bug.bar);
+    }
+  }
+
   /** The living boss, if there is one. */
   get activeBoss() {
     return this.boss && this.bugs.includes(this.boss) ? this.boss : null;
@@ -167,9 +188,25 @@ export class BugSystem {
     const cells = this.hooks.plotCells();
     for (let i = this.bugs.length - 1; i >= 0; i--) {
       const bug = this.bugs[i];
-      const cell = cells[bug.target];
-
-      if (!bug.attached) {
+      if (bug.hunter) {
+        // Charge the gardener; bite once in reach, then wind up again.
+        const p = this.hooks.playerPos();
+        const dx = p.x - bug.mesh.position.x;
+        const dz = p.z - bug.mesh.position.z;
+        const d = Math.hypot(dx, dz);
+        const reach = 0.7 + bug.spec.size * 0.45;
+        if (d > reach) {
+          const v = bug.spec.speed * (bug.spec.boss ? 2.4 : 1.5) * dt;
+          bug.mesh.position.x += (dx / d) * v;
+          bug.mesh.position.z += (dz / d) * v;
+          bug.mesh.rotation.y = Math.atan2(dx, dz);
+          bug.biteCd = Math.min(bug.biteCd, 0.5);
+        } else {
+          bug.biteCd -= dt;
+          if (bug.biteCd <= 0) { bug.biteCd = 1.5; this.hooks.onBite?.(bug); }
+        }
+      } else if (!bug.attached) {
+        const cell = cells[bug.target];
         const dx = cell.x - bug.mesh.position.x;
         const dz = cell.z - bug.mesh.position.z;
         const d = Math.hypot(dx, dz);
@@ -229,6 +266,7 @@ export class BugSystem {
   nearest(x, z, radius) {
     let best = null, bestD = radius;
     for (const bug of this.bugs) {
+      if (bug.arena) continue;          // lair bosses are the gardener's problem, not the turrets'
       const d = Math.hypot(bug.mesh.position.x - x, bug.mesh.position.z - z);
       if (d < bestD) { best = bug; bestD = d; }
     }
