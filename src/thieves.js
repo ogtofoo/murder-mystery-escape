@@ -5,6 +5,7 @@ import { THIEVES_BY_ID, rollThief, thiefScale } from './data.js';
 
 const ENTER_FROM = 26;      // how far out they appear
 const STEAL_TIME = 3.2;     // seconds spent prising a crop loose
+const HOME_WAIT = 7;        // seconds a gnome fumbles at his door, so you can catch up
 
 function bodyMat(color) {
   return new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.7 });
@@ -93,9 +94,13 @@ export class ThiefPack {
   get count() { return this.thieves.length; }
 
   /** Send one in. Returns null when there is nothing worth taking. */
-  /** @param forceId spawn this species instead of rolling one */
-  spawn(ownedPlots, prestiges, forceId = null) {
-    const ripe = this.hooks.ripePlots();
+  /**
+   * @param forceId spawn this species instead of rolling one
+   * @param anyPlot with nothing ripe, go for this plot anyway (debugging)
+   */
+  spawn(ownedPlots, prestiges, forceId = null, anyPlot = -1) {
+    let ripe = this.hooks.ripePlots();
+    if (!ripe.length && anyPlot >= 0) ripe = [anyPlot];
     if (!ripe.length) return null;
     const spec = THIEVES_BY_ID[forceId] || rollThief();
     // A gnome goes for the most valuable thing in the garden; the rest grab anything.
@@ -145,13 +150,19 @@ export class ThiefPack {
           if (!took) this.scare(th, true);
           else this.flee(th);
         }
+      } else if (th.mode === 'home') {
+        // At his door: fidgeting with the boulder while you close in.
+        th.mesh.position.y = Math.abs(Math.sin(t * 9 + th.phase)) * 0.1;
+        if (this.hooks.onHome?.(th)) { this.remove(th); continue; }
+        th.timer -= dt;
+        if (th.timer <= 0) { this.hooks.onLost?.(th); this.remove(th); continue; }
       } else {
         // A gnome runs home to his lair; everyone else runs for the fence.
         const home = th.spec.greedy ? this.hooks.home?.() : null;
         if (home) {
           const dx = home.x - th.mesh.position.x, dz = home.z - th.mesh.position.z;
           const d = Math.hypot(dx, dz);
-          if (d < 1.4) { this.hooks.onHome?.(th); this.remove(th); continue; }
+          if (d < 1.4) { th.mode = 'home'; th.timer = HOME_WAIT; th.mesh.position.y = 0; continue; }
           const v = th.spec.speed * 1.4 * dt;
           th.mesh.position.x += (dx / d) * v;
           th.mesh.position.z += (dz / d) * v;
@@ -184,9 +195,14 @@ export class ThiefPack {
 
   /** Turn and run, telling the game once. */
   flee(th) {
-    if (th.mode === 'flee') return;
+    if (th.mode === 'flee' || th.mode === 'home') return;
     th.mode = 'flee';
     this.hooks.onFlee?.(th);
+  }
+
+  /** The gnome currently running for (or waiting at) his lair, if any. */
+  get runningGnome() {
+    return this.thieves.find(th => th.spec.greedy && (th.mode === 'flee' || th.mode === 'home')) || null;
   }
 
   damage(th, amount) {

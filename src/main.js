@@ -38,6 +38,9 @@ import { buildCave, buildMouth, Lair, CAVE_ORIGIN, CAVE_RADIUS, FOLLOW_RANGE, WA
          CAVE_COOLDOWN, CAVE_RETRY, goldenReward } from './cave.js';
 
 let menuSuppressUntil = 0;
+// ?gnome in the address bar: a Garden Gnome turns up right away and keeps
+// coming, day or night, ripe crops or not — for testing the lair.
+const DEBUG_GNOME = new URLSearchParams(location.search).has('gnome');
 let escClosedShop = false;
 
 const REACH = 6.5;
@@ -894,8 +897,9 @@ const thieves = new ThiefPack(scene, {
       : '🧙 The gnome is scurrying off somewhere — <b>follow him!</b>', 'gold');
   },
   onHome: th => {
+    if (state.caveFound) return true;                      // straight in, he knows the way
     const d = Math.hypot(player.pos.x - th.mesh.position.x, player.pos.z - th.mesh.position.z);
-    if (state.caveFound || d > FOLLOW_RANGE) return;
+    if (d > FOLLOW_RANGE) return false;                    // keep waiting at the door
     state.caveFound = true;
     mouth.setFound(true);
     for (let i = 0; i < 6; i++) burst({ x: mouth.hole.x, z: mouth.hole.z }, 0x7fe4ff);
@@ -903,6 +907,11 @@ const thieves = new ThiefPack(scene, {
     sfx.pack(7);
     gamepad.rumble(0.7, 500);
     save();
+    return true;
+  },
+  onLost: th => {
+    const d = Math.round(Math.hypot(player.pos.x - th.mesh.position.x, player.pos.z - th.mesh.position.z));
+    ui.toast(`🧙 The gnome slipped away into the hills — you were <b>${d}m</b> behind. Stay within ${FOLLOW_RANGE}m next time!`, 'bad');
   },
   onCaught: th => {
     const reward = Math.floor(th.maxHp * 40);
@@ -922,8 +931,18 @@ let thiefSpawns = 0;
 /** After dark, someone always fancies your crops. */
 function updateThieves(dt, t) {
   thieves.update(dt, t);
+  if (lair.inside) { thiefClock = 0; return; }
 
-  if (!isNight() || lair.inside) { thiefClock = 0; return; }
+  if (DEBUG_GNOME) {
+    thiefClock += dt;
+    if (thiefClock < 3 || thieves.thieves.some(x => x.spec.greedy)) return;
+    thiefClock = 0;
+    const th = thieves.spawn(state.owned, state.prestiges, 'gnome', 0);
+    if (th) ui.toast('🧪 <b>Debug:</b> a Garden Gnome is on his way.', 'gold');
+    return;
+  }
+
+  if (!isNight()) { thiefClock = 0; return; }
   thiefClock += dt;
   const every = Math.max(12, 40 - state.owned * 0.6);
   if (thiefClock < every) return;
@@ -1116,6 +1135,17 @@ const lair = new Lair(bugs, {
 });
 
 function caveOpensIn() { return Math.max(0, state.caveUntil - Date.now()); }
+
+/** Top-of-screen line while a gnome is running home and the lair is still secret. */
+function gnomeTracker() {
+  if (state.caveFound) return '';
+  const g = thieves.runningGnome;
+  if (!g) return '';
+  const d = Math.round(Math.hypot(player.pos.x - g.mesh.position.x, player.pos.z - g.mesh.position.z));
+  return g.mode === 'home'
+    ? `🧙 The gnome is at his door · ${d}m away · get within ${FOLLOW_RANGE}m! · ${Math.ceil(g.timer)}s`
+    : `🧙 Follow the gnome! · ${d}m away · stay within ${FOLLOW_RANGE}m`;
+}
 
 function enterCave() {
   if (!state.caveFound || lair.inside) return;
@@ -1825,7 +1855,7 @@ function tick() {
   mouth.update(t);
   if (lair.inside) { lair.update(dt); cave.update(dt, t); }
   caveHit = Math.max(0, caveHit - dt);
-  ui.setCave(lair.inside ? lair.label() : '', caveHit > 0);
+  ui.setCave(lair.inside ? lair.label() : gnomeTracker(), caveHit > 0);
   if (sky.takeStrike()) sfx.thunder();
   ui.setSky(phase, state.weather);
   ui.setEggs(Date.now());
@@ -1904,7 +1934,8 @@ function tick() {
 function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
-window.game = { build: BUILD_LABEL, sky, petPack, thieves, cave, mouth, lair, enterCave, leaveCave, openPack, callPets, refreshQuests, refreshShelf, shelfCount, isNight, questDone, questProgress, claimQuest, updateCarnivores, updateLure, petPower,
+window.game = { build: BUILD_LABEL, sky, petPack, thieves, cave, mouth, lair, enterCave, leaveCave, openPack,
+                sendGnome: () => thieves.spawn(state.owned, state.prestiges, 'gnome', 0), callPets, refreshQuests, refreshShelf, shelfCount, isNight, questDone, questProgress, claimQuest, updateCarnivores, updateLure, petPower,
                 buyDefence, placeDefence, buyProp, placeProp, syncProps, updateThieves,
                 growth, isRipe, feedProgress, cropValue, fmt, PLANTS_BY_ID, feedNearestPet, doGoldenHarvest, updateWeather, sellDevice, buyEgg, hatchEgg, buyUpgrade, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
                 placeSprinkler, buyWeapon, buyTurret, placeTurret, bugs, startRaid, fireWeapon,
@@ -1922,6 +1953,8 @@ syncAllPlots();
 ui.refresh();
 document.getElementById('loading').remove();
 tick();
+
+if (DEBUG_GNOME) ui.toast('🧪 <b>Gnome debug mode</b> — gnomes keep coming until you find the lair. Remove <b>?gnome</b> from the address to stop.', 'gold');
 
 // Gentle nudge for a brand-new gardener.
 if (state.money <= 1 && Object.keys(state.seeds).length === 0 && state.stats.harvested === 0) {

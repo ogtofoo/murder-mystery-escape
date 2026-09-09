@@ -37,6 +37,12 @@ export class UI {
       rankline: $('#rankline'), eggline: $('#eggline'), cavebar: $('#cavebar'),
     };
 
+    // Toasts stack underneath the wallet panel, however tall it grows.
+    const topleft = $('#topleft');
+    const placeToasts = () => { this.el.toasts.style.top = `${topleft.offsetTop + topleft.offsetHeight + 10}px`; };
+    new ResizeObserver(placeToasts).observe(topleft);
+    placeToasts();
+
     $('#playbtn').addEventListener('click', () => this.hooks.play());
     $('#resetbtn').addEventListener('click', () => {
       if (confirm('Erase your garden and start again with 1 sheckle?')) this.hooks.reset();

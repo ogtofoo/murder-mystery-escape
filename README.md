@@ -210,6 +210,14 @@ about 14m of him when he gets there and the boulder rolls aside: you've found hi
 and it stays found forever (the **Secret Keeper** trophy). Until you've found it, every third
 thief is a gnome so you get plenty of chances.
 
+While a gnome is running home the top of the screen shows how far away he is. He waits at his
+door for about seven seconds fumbling with the boulder, so you only need to be within 22m of him
+before that runs out — and if you weren't, the game tells you how far behind you were.
+
+**Testing tip:** open the game as `http://localhost:8777/?gnome` and a gnome turns up a few seconds
+after you press Play and keeps coming — day or night, ripe crops or not — until you take `?gnome`
+back out of the address.
+
 Press **E** at the glowing cave mouth to go in. Inside is a huge ice cavern — crystal spires,
 stalactites, drifting snow, the gnome's frozen throne and his hoard of coins — and a **boss rush**
 of every MEGA bug you know from raids, ending with one that only lives down here:
