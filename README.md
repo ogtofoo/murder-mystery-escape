@@ -228,19 +228,16 @@ after you press Play and keeps coming — day or night, ripe crops or not — un
 back out of the address.
 
 Press **E** at the glowing cave mouth to go in. Inside is a huge ice cavern — crystal spires,
-stalactites, drifting snow, the gnome's frozen throne and his hoard of coins — and a **boss rush**
-of every MEGA bug you know from raids, ending with one that only lives down here:
+stalactites, drifting snow, the gnome's frozen throne and his hoard of coins — and a **twenty wave
+boss rush** of every MEGA bug you know from raids, ending with one that only lives down here:
 
-| Wave | Bosses |
+| Waves | What comes at you |
 | --- | --- |
-| 1 | MEGA APHID |
-| 2 | MEGA JUMP SPIDER + MEGA APHID |
-| 3 | MEGA LOCUST + MEGA JUMP SPIDER |
-| 4 | MEGA SAND SCORPION + MEGA LEAF BEETLE |
-| 5 | MEGA VOID MANTIS + MEGA ACID SPITTER |
-| 6 | MEGA TITAN WEEVIL + MEGA SAND SCORPION |
-| 7 | **FROST TITAN** (3× a MEGA Titan) + MEGA ACID SPITTER + MEGA JUMP SPIDER |
-| 8 | **THE FROST WYRM** — only on Level 20, 40, 60… (see below) |
+| 1–5 | Aphids, then spiders, beetles and locusts — the warm-up |
+| 6–10 | Scorpions, root grubs, acid spitters and the first Void Mantis |
+| 11–15 | Pairs and trios: mantises, Titan Weevils, then the first **FROST TITAN** |
+| 16–19 | Two Titans at once, Frost Titans with escorts, then **two Frost Titans** |
+| **20** | **THE FROST WYRM** — see below |
 
 Down here the bosses hunt **you**, not your crops, and each species comes at you its own way — see
 **Bugs that fight back** below. There's no health bar to lose. Instead each wave has a **75 second
@@ -252,30 +249,31 @@ You can walk out through the glowing arch at any time.
 Rewards stack up fast:
 
 - Every boss pays its usual MEGA bounty.
-- Every wave cleared pays a windfall that scales with your **lifetime earnings** and doubles each
-  wave (a full clear is worth roughly a third of everything you've ever earned).
-- **Wave 2** cracks open a free seed pack, **wave 4** thaws out a free egg, **wave 6** drops
+- Every wave cleared pays a windfall that scales with your **lifetime earnings** and climbs 15% a
+  wave, so the late waves carry the run. Beating all twenty is worth roughly **three quarters of
+  everything you have ever earned**.
+- **Wave 5** cracks open a free seed pack, **wave 10** thaws out a free egg, **wave 15** drops
   three SUPER seeds.
-- **Clearing all seven** pays Golden Seeds (10, +5 per depth), a guaranteed **CARNIVORE seed**,
-  and the **Lair Raider** trophy — which unlocks the **Frost Crown** in the wardrobe. Ten clears
-  is the **Frost King** trophy.
+- **Clearing all twenty** pays Golden Seeds (10, +5 per Level), a guaranteed **CARNIVORE seed**,
+  and the **Wyrm Rider** trophy — which unlocks the **Frost Crown** in the wardrobe. Ten clears is
+  the **Frost King** trophy, twenty is **Wyrm Lord**.
 
-**The levels never end.** Each clear makes the lair one **Level** deeper: every boss gets 1.3× the
-health and every payout 1.45× bigger, forever. Since the rewards climb faster than the health, a
-deep lair is where the real money is — as long as you keep upgrading your weapon.
+**The Levels never end.** Each full clear makes the lair one **Level** deeper: all twenty waves come
+back with 1.3× the health and 1.45× the payout, forever. Since the rewards climb faster than the
+health, a deep lair is where the real money is — as long as you keep upgrading your weapon.
 
-**Every twentieth Level ends with a champion** instead of the usual last wave: the **FROST WYRM**
-itself, flying above the ice, keeping its distance and breathing frost that costs you 10 seconds a
-hit. It has 1.6× a Frost Titan's health and you get a **two minute** clock for it alone.
+**Wave 20 is the FROST WYRM**, flying above the ice, keeping its distance and breathing frost that
+costs you 10 seconds a hit. It has 1.6× a Frost Titan's health and you get a **two minute** clock
+for it alone.
 
 **You have to beat it.** Win and the wyrm bows to you: a pet big enough to *ride*. Press **Y** to
 climb on. Riding is nearly twice as fast, you sit high above the crops, and **E** breathes a 12m
 cone of frost instead of firing your weapon. Press **Y** again to hop down. It never hatches from
-an egg — beating the champion is the only way to get one.
+an egg — reaching wave 20 and beating it is the only way to get one.
 
-Lose to it and you get nothing: the run freezes, the level is *not* cleared, and Level 20 is still
-sitting there waiting for you. Beat it again at Level 40, 60, 80 and so on and your own wyrm
-**gains a level** — each one is +55% breath damage, forever. The lair closes for 20 minutes after a clear (8 minutes if you
+Lose to it and you get nothing: the run freezes, the Level is *not* cleared, and you start the
+twenty waves again next time. Beat it on a later run and your own wyrm **gains a level** — each
+one is +55% breath damage, forever. The lair closes for 20 minutes after a clear (8 minutes if you
 froze out or left early), and raids, thieves and drake lures are all paused while you're
 underground — your garden keeps growing, and your pets come down with you.
 

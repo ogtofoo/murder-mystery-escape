@@ -714,9 +714,9 @@ export const TROPHIES = [
   { id:'mastery20', name:'Garden Mastery',   hint:'Buy 20 Mastery upgrade levels',   goal:20,    at:s => Object.values(s.upgrades || {}).reduce((a, b) => a + b, 0), reward:5e10 },
   { id:'rankgod',   name:'Garden God',       hint:'Earn ₪1 sextillion all-time',     goal:1e21,  at:s => s.stats.earned, reward:0, golden:250 },
   { id:'lairfound', name:'Secret Keeper',    hint:"Follow a gnome to his ice lair",  goal:1,     at:s => (s.caveFound ? 1 : 0), reward:5e6 },
-  { id:'lair1',     name:'Lair Raider',      hint:'Clear the Ice Lair once',         goal:1,     at:s => s.stats.caveClears || 0, reward:0, golden:10 },
+  { id:'lair1',     name:'Wyrm Rider',       hint:'Beat all 20 waves and the Frost Wyrm', goal:1, at:s => s.stats.caveClears || 0, reward:0, golden:10 },
   { id:'lair10',    name:'Frost King',       hint:'Clear the Ice Lair 10 times',     goal:10,    at:s => s.stats.caveClears || 0, reward:0, golden:120 },
-  { id:'lair20',    name:'Wyrm Rider',       hint:'Clear Ice Lair Level 20',         goal:20,    at:s => s.stats.caveClears || 0, reward:0, golden:500 },
+  { id:'lair20',    name:'Wyrm Lord',        hint:'Clear the whole Ice Lair 20 times', goal:20,  at:s => s.stats.caveClears || 0, reward:0, golden:500 },
   { id:'golden1',   name:'Golden Touch',     hint:'Do one Golden Harvest',          goal:1,     at:s => s.prestiges, reward:0, golden:5 },
   { id:'golden10',  name:'Living Legend',    hint:'Do 10 Golden Harvests',          goal:10,    at:s => s.prestiges, reward:0, golden:100 },
 ];

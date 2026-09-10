@@ -23,16 +23,35 @@ export const FROST_TITAN = (() => {
            speed: t.speed * 1.15, color: 0x9fe8ff, bounty: t.bounty * 3, frost: true };
 })();
 
-/** Each wave: which bosses come out. Every one but the last is a MEGA bug you know from raids. */
+/**
+ * A run is a twenty wave gauntlet. Waves 1–19 are MEGA versions of bugs you
+ * know from raids, climbing through every species; wave 20 is the FROST WYRM
+ * itself. You have to beat all twenty in one visit.
+ */
 export const WAVES = [
   ['aphid'],
+  ['aphid', 'aphid'],
   ['spider', 'aphid'],
-  ['locust', 'spider'],
-  ['scorp', 'beetle'],
+  ['beetle', 'spider'],
+  ['locust', 'beetle'],
+  ['locust', 'spider', 'aphid'],
+  ['scorp', 'locust'],
+  ['grub', 'scorp'],
+  ['spitter', 'grub'],
   ['mantis', 'spitter'],
-  ['titan', 'scorp'],
-  ['frost', 'spitter', 'spider'],
+  ['mantis', 'scorp', 'spider'],
+  ['titan', 'mantis'],
+  ['spitter', 'spitter', 'locust'],
+  ['titan', 'scorp', 'spider'],
+  ['frost', 'mantis'],
+  ['titan', 'titan'],
+  ['frost', 'spitter', 'scorp'],
+  ['frost', 'titan', 'spider'],
+  ['frost', 'frost', 'mantis'],
 ];
+
+/** Waves in a full run, the wyrm included. */
+export const TOTAL_WAVES = WAVES.length + 1;
 
 /** Levels never stop: health and bounty both climb forever, level by level. */
 export const HP_PER_LEVEL = 1.3;
@@ -46,27 +65,24 @@ export function waveSpec(id, depth) {
 }
 
 /**
- * Sheckles for clearing a wave. Scales with what you've earned so it is always
- * a windfall, and doubles every wave so the deep waves are the prize.
+ * Sheckles for clearing a wave. Scales with what you've earned, and climbs
+ * 15% a wave on top of that, so the late waves carry the run. Beating all
+ * twenty is worth roughly three quarters of everything you have ever earned.
  */
+export const PAY_PER_WAVE = 1.15;
 export function waveReward(wave, earned, depth) {
   const base = Math.max(20000, earned / 2000);
-  return Math.floor(base * wave * Math.pow(2, wave - 1) * Math.pow(PAY_PER_LEVEL, depth));
+  return Math.floor(base * wave * Math.pow(PAY_PER_WAVE, wave - 1) * Math.pow(PAY_PER_LEVEL, depth));
 }
 
 export function goldenReward(depth) { return 10 + 5 * depth; }
 
 /**
- * Every twentieth Level ends with a champion instead of the usual last wave:
- * the FROST WYRM itself. Beat it at Level 20 and you get to ride it; beat it
- * again at 40, 60, 80… and yours grows a level.
+ * Wave 20 is the FROST WYRM. Beat it the first time and it becomes a mount;
+ * every time after that your own wyrm grows a level.
  */
-export const CHAMPION_EVERY = 20;
-export const MOUNT_LEVEL = CHAMPION_EVERY;
+export const CHAMPION_WAVE = TOTAL_WAVES;
 export const CHAMPION_SECONDS = 120;
-
-/** True on a Level that ends with the wyrm. `depth` is Level − 1. */
-export function isChampionLevel(depth) { return (depth + 1) % CHAMPION_EVERY === 0; }
 
 /** The wyrm you fight. Flies, keeps its distance and breathes frost. */
 export function championSpec(depth) {
@@ -346,10 +362,10 @@ export class Lair {
     this.runId = 0;          // bumped per visit, so stale timers can't touch a new run
   }
 
-  /** How many waves this Level runs — one more on a champion Level. */
-  get totalWaves() { return WAVES.length + (isChampionLevel(this.depth) ? 1 : 0); }
+  /** Every run is the full twenty, ending on the wyrm. */
+  get totalWaves() { return TOTAL_WAVES; }
 
-  get championWave() { return isChampionLevel(this.depth) ? this.totalWaves : -1; }
+  get championWave() { return CHAMPION_WAVE; }
 
   get arenaBugs() { return this.bugs.bugs.filter(b => b.arena); }
 
@@ -379,7 +395,7 @@ export class Lair {
       const bug = this.bugs.spawnHunter(championSpec(this.depth),
         CAVE_ORIGIN.x, CAVE_ORIGIN.z - 22);
       bug.arena = true;
-      this.hooks.onChampion?.(this.depth + 1);
+      this.hooks.onChampion?.();
       return;
     }
 
@@ -437,8 +453,7 @@ export class Lair {
   label() {
     if (this.phase === 'break') {
       if (this.wave === 0) {
-        return `❄️ GNOME'S ICE LAIR · Level ${this.depth + 1}${
-          isChampionLevel(this.depth) ? ' · the FROST WYRM is waiting' : ''} · get ready…`;
+        return `❄️ GNOME'S ICE LAIR · Level ${this.depth + 1} · ${TOTAL_WAVES} waves · get ready…`;
       }
       return this.wave + 1 === this.championWave
         ? `❄️ Wave ${this.wave} cleared! · the FROST WYRM wakes in ${Math.ceil(this.breakLeft)}`
@@ -448,9 +463,9 @@ export class Lair {
       const s = Math.max(0, Math.ceil(this.timeLeft));
       const clock = `⏱ ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
       if (this.wave === this.championWave) {
-        return this.depth + 1 === MOUNT_LEVEL
-          ? `🐉 FROST WYRM · beat it and you can ride it! · ${clock}`
-          : `🐉 FROST WYRM · beat it and yours grows a level · ${clock}`;
+        return this.hooks.hasMount?.()
+          ? `🐉 WAVE 20: FROST WYRM · beat it and yours grows a level · ${clock}`
+          : `🐉 WAVE 20: FROST WYRM · beat it and you can ride it! · ${clock}`;
       }
       return `❄️ ICE LAIR · Wave ${this.wave}/${this.totalWaves} · ${clock}`;
     }

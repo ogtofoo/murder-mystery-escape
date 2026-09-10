@@ -37,7 +37,7 @@ import { buildProp, litProp } from './props.js';
 import { renderPadTest } from './padtest.js';
 import { BUILD_LABEL } from './build.js';
 import { buildCave, buildMouth, Lair, CAVE_ORIGIN, CAVE_RADIUS, FOLLOW_RANGE, WAVES,
-         CAVE_COOLDOWN, CAVE_RETRY, goldenReward, MOUNT_LEVEL, isChampionLevel } from './cave.js';
+         CAVE_COOLDOWN, CAVE_RETRY, goldenReward, TOTAL_WAVES, CHAMPION_WAVE } from './cave.js';
 
 let menuSuppressUntil = 0;
 // ?gnome in the address bar: a Garden Gnome turns up right away and keeps
@@ -416,7 +416,14 @@ function openPack(pack) {
   }
   sfx.pack(TIERS[PLANTS_BY_ID[best].tier].order);
   gamepad.rumble(0.6, 260);
-  ui.showPack(pack, reveal);
+  // Mid-fight a card modal would steal the screen and the pointer, so the
+  // lair just tells you what fell out and lets you keep swinging.
+  if (lair.inside) {
+    const list = reveal.reverse().map(r => `${r.isNew ? '✨ ' : ''}${PLANTS_BY_ID[r.id].name}`).join(', ');
+    ui.toast(`🎁 <b>${pack.name}</b>: ${list}`, 'gold');
+  } else {
+    ui.showPack(pack, reveal);
+  }
   ui.refresh();
   save();
 }
@@ -772,7 +779,8 @@ function hatchEgg(index) {
   state.equipped.push(pet.uid);
   state.stats.hatched = (state.stats.hatched || 0) + 1;
   syncPets();
-  ui.showHatch(spec);
+  if (lair.inside) ui.toast(`🥚 <b>${spec.name}</b> hatched and joined you in the lair!`, 'gold');
+  else ui.showHatch(spec);
   sfx.pack(TIERS[spec.tier].order);
   gamepad.rumble(0.6, 300);
   save();
@@ -1142,14 +1150,15 @@ const lair = new Lair(bugs, {
   earned: () => state.stats.earned,
   onWave: (n, ids) => {
     const names = ids.map(id => (id === 'frost' ? 'FROST TITAN' : 'MEGA ' + BUGS_BY_ID[id].name.toUpperCase()));
-    ui.toast(`❄️ <b>Wave ${n}/${WAVES.length}</b> — ${names.join(' + ')} incoming!`, 'bad');
+    ui.toast(`❄️ <b>Wave ${n}/${TOTAL_WAVES}</b> — ${names.join(' + ')} incoming!`, 'bad');
     sfx.raid();
     gamepad.rumble(0.6, 400);
   },
-  onChampion: level => {
-    ui.toast(level === MOUNT_LEVEL
-      ? `🐉 <b>THE FROST WYRM!</b> Beat it and it's yours to ride.`
-      : `🐉 <b>THE FROST WYRM RETURNS!</b> Beat it and your own wyrm grows a level.`, 'bad');
+  hasMount: () => state.pets.some(p => PETS_BY_ID[p.id]?.mount),
+  onChampion: () => {
+    ui.toast(state.pets.some(p => PETS_BY_ID[p.id]?.mount)
+      ? `🐉 <b>WAVE ${CHAMPION_WAVE}: THE FROST WYRM!</b> Beat it and your own wyrm grows a level.`
+      : `🐉 <b>WAVE ${CHAMPION_WAVE}: THE FROST WYRM!</b> Beat it and it's yours to ride.`, 'bad');
     sfx.roar();
     gamepad.rumble(1, 800);
   },
@@ -1160,15 +1169,15 @@ const lair = new Lair(bugs, {
     ui.toast(`🏆 <b>Wave ${n} cleared!</b> <b class="coin">+₪${fmt(reward)}</b>`, 'gold');
     sfx.pack(5);
     // Every other wave drops something you can't just buy.
-    if (n === 2) {
+    if (n === 5) {
       const pack = [...PACKS].reverse().find(p => p.cost <= Math.max(PACKS[0].cost, state.stats.earned / 20)) || PACKS[0];
       ui.toast(`🎁 The gnome's hoard coughs up a free <b>${pack.name}</b>!`, 'gold');
       openPack(pack);
-    } else if (n === 4) {
+    } else if (n === 10) {
       const egg = [...EGGS].reverse().find(e => e.cost <= Math.max(EGGS[0].cost, state.stats.earned / 20)) || EGGS[0];
       state.eggs.push({ id: egg.id, readyAt: Date.now() + egg.hatch * 500 });
       ui.toast(`🥚 A frozen <b>${egg.name}</b> thaws in your pocket — hatching soon!`, 'gold');
-    } else if (n === 6) {
+    } else if (n === 15) {
       const supers = PLANTS.filter(p => p.tier === 'super');
       const pick = supers[Math.floor(Math.random() * supers.length)];
       addSeed(pick.id, 3);
@@ -1178,9 +1187,8 @@ const lair = new Lair(bugs, {
     save();
   },
   onClear: depth => {
-    const level = depth + 1;
-    // A champion Level ends on the wyrm itself: beating it is how you win one.
-    if (isChampionLevel(depth)) {
+    // Every run ends on the wyrm itself: beating it is how you win one.
+    {
       const spec = PETS.find(p => p.mount);
       const mine = state.pets.find(p => PETS_BY_ID[p.id]?.mount);
       if (!mine) {
@@ -1188,7 +1196,6 @@ const lair = new Lair(bugs, {
         state.pets.push(pet);
         state.equipped.push(pet.uid);
         syncPets();
-        ui.showHatch(spec);
         ui.toast(`🐉 <b>YOU BEAT THE FROST WYRM!</b> It bows to you — press <b>Y</b> to ride it.`, 'gold');
       } else {
         mine.level++;
@@ -1255,7 +1262,7 @@ function enterCave() {
   player.teleport(cave.spawn.x, cave.spawn.z, cave.spawn.yaw);
   petPack.relocate(CAVE_ORIGIN, player.pos.x, player.pos.z + 2);
   if (!player.weapon && bestWeapon()) toggleWeapon(true);
-  ui.toast(`❄️ <b>The Gnome's Ice Lair</b> — bosses come in waves. Beat the clock, grab the loot, leave through the arch.`, 'gold');
+  ui.toast(`❄️ <b>The Gnome's Ice Lair</b> — ${TOTAL_WAVES} waves, ending with the <b>FROST WYRM</b>. Beat the clock, grab the loot.`, 'gold');
   sfx.weather();
   gamepad.rumble(0.5, 300);
 }
@@ -1524,7 +1531,7 @@ function updatePrompt() {
     const wait = caveOpensIn();
     show(wait > 0
       ? `🧊 The Ice Lair is frozen shut <span class="sub">opens in ${clockish(wait)}</span>`
-      : `<b>[E]</b> Enter the Gnome's Ice Lair <span class="sub">depth ${(state.stats.caveClears || 0) + 1} · ${WAVES.length} boss waves · big loot</span>`);
+      : `<b>[E]</b> Enter the Gnome's Ice Lair <span class="sub">Level ${(state.stats.caveClears || 0) + 1} · ${TOTAL_WAVES} boss waves · the Frost Wyrm at the end</span>`);
     return;
   }
   if (target >= 0) {
@@ -2110,6 +2117,7 @@ function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 window.game = { build: BUILD_LABEL, sky, petPack, thieves, cave, mouth, lair, enterCave, leaveCave, openPack,
                 toggleRide, dismount, breathe, upgradeWeapon, weaponLevel, weaponDamage, nextWeaponCost,
                 riding: () => ridingUid, PETS_BY_ID, BUGS_BY_ID, WAVES, rollBug,
+                gnomeCredit: () => gnomeCredit, updateGnomeLure,
                 sendGnome: () => thieves.spawn(state.owned, state.prestiges, 'gnome', 0), callPets, refreshQuests, refreshShelf, shelfCount, isNight, questDone, questProgress, claimQuest, updateCarnivores, updateLure, petPower,
                 buyDefence, placeDefence, buyProp, placeProp, syncProps, updateThieves,
                 growth, isRipe, feedProgress, cropValue, fmt, PLANTS_BY_ID, feedNearestPet, doGoldenHarvest, updateWeather, sellDevice, buyEgg, hatchEgg, buyUpgrade, toggleShovel, toggleCan, toggleWeapon, digUp, sellSeed, buyCan, buySprinkler,
