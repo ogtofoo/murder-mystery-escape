@@ -1604,15 +1604,17 @@ function updatePrompt() {
     show(`<b>[E]</b> Browse the seed shop <span class="sub">seeds, packs and the almanac</span>`);
     return;
   }
-  const pet = petPack.nearest(player.pos.x, player.pos.z, 3.2);
-  if (pet) {
-    const owned = state.pets.find(p => p.uid === pet.uid);
+  if (nearPet) {
+    // With nothing else to say, give the pet the whole prompt rather than
+    // repeating the one-line version underneath it.
+    const owned = state.pets.find(p => p.uid === nearPet.uid);
     const mood = moodOf(owned?.happy);
     const seed = PLANTS_BY_ID[ui.selected];
     const treat = seed ? TREAT_VALUE[seed.tier] : 0;
-    show(seed && seedCount(seed.id) > 0
-      ? `<b>[T]</b> Feed ${seed.name} seed to ${pet.spec.name} <span class="sub">${mood.icon} ${Math.round(owned?.happy || 0)}/100 · this treat is worth +${treat}</span>`
-      : `${pet.spec.name} <span class="sub">${mood.icon} ${mood.word} · ${Math.round(owned?.happy || 0)}/100 · hold a seed and press T to feed it</span>`);
+    const ride = nearPet.spec.mount ? ' · <b>[Y]</b> to ride' : '';
+    ui.setPrompt(seed && seedCount(seed.id) > 0
+      ? `<b>[T]</b> Feed ${seed.name} seed to ${nearPet.spec.name} <span class="sub">${mood.icon} ${Math.round(owned?.happy || 0)}/100 · this treat is worth +${treat}${ride}</span>`
+      : `${nearPet.spec.name} <span class="sub">${mood.icon} ${mood.word} · ${Math.round(owned?.happy || 0)}/100 · hold a seed and press T to feed it${ride}</span>`);
     return;
   }
   show('');
