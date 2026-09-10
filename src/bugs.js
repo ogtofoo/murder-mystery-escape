@@ -2,11 +2,30 @@
 
 import * as THREE from 'three';
 import { BUGS_BY_ID, rollBug, bossOf } from './data.js';
+import { buildPet } from './pets.js';
 
 const SPAWN_RING = 16;   // far enough to see them coming, close enough to matter
 const ATTACH_DIST = 1.0;
 
 function buildBug(spec) {
+  // A champion borrows the pet model it will become, blown up and iced over.
+  if (spec.model === 'wyrm') {
+    // Deep storm-blue with a hard cyan glow, so it reads against a white cave.
+    const g = buildPet({ shape: 'wyrm', tier: 'carnivore', mount: true, colors: [0x0d47a1, 0x1e88e5] });
+    g.scale.setScalar(spec.size * 0.9);
+    // The cave is bright: keep the champion dark so it stands out, not glows out.
+    g.traverse(o => {
+      if (!o.material || !o.material.emissive) return;
+      o.material = o.material.clone();
+      o.material.emissive = new THREE.Color(0x0a2a4a);
+      o.material.emissiveIntensity = 0.35;
+      o.material.roughness = 0.5;
+    });
+    const wings = g.userData.wings || [];
+    g.userData = { legs: [], body: g.children[0], tail: null, sac: null, wings };
+    return g;
+  }
+
   const g = new THREE.Group();
   const shell = new THREE.MeshStandardMaterial({ color: spec.color, flatShading: true, roughness: 0.55, metalness: 0.2 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, flatShading: true, roughness: 0.8 });
@@ -274,7 +293,9 @@ export class BugSystem {
       for (const leg of bug.mesh.userData.legs) {
         leg.rotation.x = Math.sin(t * rate + leg.userData.phase) * 0.5;
       }
-      bug.mesh.userData.body.position.y = 0.26 + Math.abs(Math.sin(t * rate * 0.5 + bug.phase)) * 0.04;
+      if (bug.mesh.userData.body && !bug.spec.fly) {
+        bug.mesh.userData.body.position.y = 0.26 + Math.abs(Math.sin(t * rate * 0.5 + bug.phase)) * 0.04;
+      }
       if (bug.attached) bug.mesh.position.y = Math.sin(t * 6 + bug.phase) * 0.03;
 
       // Health bar faces the camera, and only shows once a bug is hurt.
@@ -301,6 +322,12 @@ export class BugSystem {
     const d = Math.hypot(dx, dz) || 0.001;
     const spec = bug.spec;
     const kind = spec.attack || 'bite';
+    if (spec.fly) {
+      bug.mesh.position.y = 2.6 + Math.sin(t * 1.6 + bug.phase) * 0.35;
+      for (const w of bug.mesh.userData.wings || []) {
+        w.rotation.z = Math.sin(t * 6 + bug.phase) * 0.6 * (w.userData.wing || 1);
+      }
+    }
     const speed = spec.speed * (spec.boss ? 2.4 : 1.5);
     bug.biteCd -= dt;
 
@@ -363,7 +390,7 @@ export class BugSystem {
   /** Launch an acid glob at a point; it damages on arrival. */
   spit(bug, target) {
     const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22 * bug.spec.size, 0),
-      new THREE.MeshBasicMaterial({ color: 0x9cff57 }));
+      new THREE.MeshBasicMaterial({ color: bug.spec.spitColor || 0x9cff57 }));
     mesh.position.copy(bug.mesh.position).setY(0.5 * bug.spec.size);
     this.scene.add(mesh);
     const dx = target.x - mesh.position.x, dz = target.z - mesh.position.z;

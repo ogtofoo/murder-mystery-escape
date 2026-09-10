@@ -27,6 +27,16 @@ const cyl = () => geo('cyl', () => new THREE.CylinderGeometry(0.5, 0.5, 1, 6));
 const torus = () => geo('torus', () => new THREE.TorusGeometry(0.5, 0.14, 6, 12));
 const eyeMat = () => (G.eye ||= new THREE.MeshBasicMaterial({ color: 0x1b1b1b }));
 
+/**
+ * Add a part tilted about X. `group.add(child)` returns the *group*, so the
+ * rotation can't be chained onto it — doing that spins the whole model.
+ */
+function tilt(group, mesh, rx) {
+  mesh.rotation.x = rx;
+  group.add(mesh);
+  return mesh;
+}
+
 function eyes(g, y, z, sep = 0.16, r = 0.06) {
   for (const side of [-1, 1]) g.add(part(ball(), eyeMat(), [side * sep, y, z], r * 2));
 }
@@ -65,7 +75,7 @@ const SHAPES = {
       w.userData.wing = side;
       g.add(w);
     }
-    g.add(part(cone(), b, [0, 0, -0.42], [0.2, 0.24, 0.2])).rotation.x = -Math.PI / 2;
+    tilt(g, part(cone(), b, [0, 0, -0.42], [0.2, 0.24, 0.2]), -Math.PI / 2);
     eyes(g, 0.06, 0.34, 0.11, 0.06);
   },
   bunny(g, p, a, b) {
@@ -98,13 +108,13 @@ const SHAPES = {
       w.userData.wing = side;
       g.add(w);
     }
-    g.add(part(cone(), b, [0, 0.12, 0.34], [0.1, 0.16, 0.1])).rotation.x = Math.PI / 2;
+    tilt(g, part(cone(), b, [0, 0.12, 0.34], [0.1, 0.16, 0.1]), Math.PI / 2);
     eyes(g, 0.2, 0.34, 0.15, 0.09);
   },
   drake(g, p, a, b) {
     g.add(part(ball(), a, [0, 0.24, -0.05], [0.66, 0.58, 0.9]));
     g.add(part(ball(), a, [0, 0.46, 0.38], [0.44, 0.4, 0.46]));
-    g.add(part(cone(), b, [0, 0.44, 0.62], [0.2, 0.26, 0.2])).rotation.x = Math.PI / 2;
+    tilt(g, part(cone(), b, [0, 0.44, 0.62], [0.2, 0.26, 0.2]), Math.PI / 2);
     for (const side of [-1, 1]) {
       const w = part(ball(), b, [side * 0.42, 0.42, -0.1], [0.5, 0.08, 0.44]);
       w.userData.wing = side;
@@ -142,9 +152,9 @@ const SHAPES = {
       const seg = part(ball(), a, [0, 0.8 - i * 0.05, -1.5 - i * 0.5], [0.7 - i * 0.14, 0.6 - i * 0.12, 0.7]);
       g.add(seg);
     }
-    g.add(part(cone(), b, [0, 0.7, -3.5], [0.5, 1.0, 0.5])).rotation.x = -Math.PI / 2;
+    tilt(g, part(cone(), b, [0, 0.7, -3.5], [0.5, 1.0, 0.5]), -Math.PI / 2);
     g.add(part(ball(), a, [0, 1.35, 1.5], [0.8, 0.75, 0.95]));             // head
-    g.add(part(cone(), b, [0, 1.2, 2.35], [0.42, 0.6, 0.42])).rotation.x = Math.PI / 2;
+    tilt(g, part(cone(), b, [0, 1.2, 2.35], [0.42, 0.6, 0.42]), Math.PI / 2);
     for (const side of [-1, 1]) {
       const w = part(ball(), b, [side * 1.7, 1.35, -0.3], [1.9, 0.14, 1.5]);
       w.userData.wing = side;

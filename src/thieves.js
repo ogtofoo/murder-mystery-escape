@@ -7,6 +7,16 @@ const ENTER_FROM = 26;      // how far out they appear
 const STEAL_TIME = 3.2;     // seconds spent prising a crop loose
 const HOME_WAIT = 7;        // seconds a gnome fumbles at his door, so you can catch up
 
+/**
+ * Add a part tilted about X. `group.add(child)` returns the *group*, so the
+ * rotation can't be chained onto it — doing that spins the whole model.
+ */
+function tilt(group, mesh, rx) {
+  mesh.rotation.x = rx;
+  group.add(mesh);
+  return mesh;
+}
+
 function bodyMat(color) {
   return new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.7 });
 }
@@ -36,14 +46,14 @@ function buildThief(spec) {
   if (spec.id === 'crow') {
     root.add(part(ball(), skin, [0, 0.5, 0], [0.5, 0.42, 0.8]));
     root.add(part(ball(), skin, [0, 0.72, 0.34], 0.3));
-    root.add(part(cone(), bodyMat(0xffb300), [0, 0.7, 0.56], [0.12, 0.3, 0.12])).rotation.x = Math.PI / 2;
+    tilt(root, part(cone(), bodyMat(0xffb300), [0, 0.7, 0.56], [0.12, 0.3, 0.12]), Math.PI / 2);
     for (const side of [-1, 1]) {
       const wing = part(ball(), skin, [side * 0.38, 0.52, -0.05], [0.5, 0.08, 0.52]);
       wing.userData.wing = side;
       root.add(wing);
       root.add(part(ball(), eyeMat(), [side * 0.11, 0.78, 0.5], 0.07));
     }
-    root.add(part(cone(), skin, [0, 0.48, -0.5], [0.24, 0.44, 0.24])).rotation.x = -Math.PI / 2;
+    tilt(root, part(cone(), skin, [0, 0.48, -0.5], [0.24, 0.44, 0.24]), -Math.PI / 2);
   } else if (spec.id === 'gnome') {
     root.add(part(cyl(), bodyMat(0x1e88e5), [0, 0.34, 0], [0.5, 0.68, 0.5]));   // smock
     root.add(part(ball(), bodyMat(0xf3d3b5), [0, 0.78, 0], 0.36));             // face

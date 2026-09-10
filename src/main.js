@@ -37,7 +37,7 @@ import { buildProp, litProp } from './props.js';
 import { renderPadTest } from './padtest.js';
 import { BUILD_LABEL } from './build.js';
 import { buildCave, buildMouth, Lair, CAVE_ORIGIN, CAVE_RADIUS, FOLLOW_RANGE, WAVES,
-         CAVE_COOLDOWN, CAVE_RETRY, goldenReward, MOUNT_LEVEL } from './cave.js';
+         CAVE_COOLDOWN, CAVE_RETRY, goldenReward, MOUNT_LEVEL, isChampionLevel } from './cave.js';
 
 let menuSuppressUntil = 0;
 // ?gnome in the address bar: a Garden Gnome turns up right away and keeps
@@ -1146,6 +1146,13 @@ const lair = new Lair(bugs, {
     sfx.raid();
     gamepad.rumble(0.6, 400);
   },
+  onChampion: level => {
+    ui.toast(level === MOUNT_LEVEL
+      ? `🐉 <b>THE FROST WYRM!</b> Beat it and it's yours to ride.`
+      : `🐉 <b>THE FROST WYRM RETURNS!</b> Beat it and your own wyrm grows a level.`, 'bad');
+    sfx.roar();
+    gamepad.rumble(1, 800);
+  },
   onWaveClear: (n, reward) => {
     earn(reward);
     state.stats.caveWaves = (state.stats.caveWaves || 0) + 1;
@@ -1172,15 +1179,21 @@ const lair = new Lair(bugs, {
   },
   onClear: depth => {
     const level = depth + 1;
-    // Level 20 is the big one: the lair gives up a wyrm you can ride.
-    if (level >= MOUNT_LEVEL && !state.pets.some(p => PETS_BY_ID[p.id]?.mount)) {
+    // A champion Level ends on the wyrm itself: beating it is how you win one.
+    if (isChampionLevel(depth)) {
       const spec = PETS.find(p => p.mount);
-      const pet = { uid: state.nextPetUid++, id: spec.id, level: 1, xp: 0, happy: 100 };
-      state.pets.push(pet);
-      state.equipped.push(pet.uid);
-      syncPets();
-      ui.showHatch(spec);
-      ui.toast(`🐉 <b>LEVEL ${MOUNT_LEVEL}!</b> The lair gives up a <b>${spec.name}</b> — press <b>Y</b> to ride it.`, 'gold');
+      const mine = state.pets.find(p => PETS_BY_ID[p.id]?.mount);
+      if (!mine) {
+        const pet = { uid: state.nextPetUid++, id: spec.id, level: 1, xp: 0, happy: 100 };
+        state.pets.push(pet);
+        state.equipped.push(pet.uid);
+        syncPets();
+        ui.showHatch(spec);
+        ui.toast(`🐉 <b>YOU BEAT THE FROST WYRM!</b> It bows to you — press <b>Y</b> to ride it.`, 'gold');
+      } else {
+        mine.level++;
+        ui.toast(`🐉 <b>The Frost Wyrm falls again!</b> Yours is now level ${mine.level} — <b>${fmt(breathDamage(mine.level))}</b> breath.`, 'gold');
+      }
       sfx.roar();
       gamepad.rumble(1, 1200);
     }
@@ -1200,7 +1213,9 @@ const lair = new Lair(bugs, {
   onFreeze: cleared => {
     ui.toast(`🧊 <b>The lair froze over.</b> ${cleared} wave${cleared === 1 ? '' : 's'} cleared — come back stronger!`, 'bad');
     sfx.deny();
-    setTimeout(() => { if (lair.inside) leaveCave(); }, 2500);
+    // Only throw *this* visit out; a new run started in the meantime is safe.
+    const run = lair.runId;
+    setTimeout(() => { if (lair.inside && lair.runId === run) leaveCave(); }, 2500);
   },
 });
 
@@ -1497,7 +1512,11 @@ function updatePrompt() {
   if (lair.inside) {
     if (cave.nearExit(player.pos)) show(`<b>[E]</b> Leave the lair${lair.phase === 'fight' ? ' <span class="sub">(the run ends here)</span>' : ''}`);
     else if (lair.phase === 'won') show(`<span class="sub">🏆 Lair cleared — head for the glowing arch</span>`);
-    else if (lair.phase === 'fight') show(`<span class="sub">Fight! Every bite costs you 4 seconds</span>`);
+    else if (lair.phase === 'fight') {
+      show(lair.wave === lair.championWave
+        ? `<span class="sub">🐉 Fight the Frost Wyrm! Its frost breath costs you 10 seconds</span>`
+        : `<span class="sub">Fight! Every hit costs you time — a bite 4s, a pounce 6s, a sting 9s</span>`);
+    }
     else show('');
     return;
   }

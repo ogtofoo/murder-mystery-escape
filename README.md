@@ -240,6 +240,7 @@ of every MEGA bug you know from raids, ending with one that only lives down here
 | 5 | MEGA VOID MANTIS + MEGA ACID SPITTER |
 | 6 | MEGA TITAN WEEVIL + MEGA SAND SCORPION |
 | 7 | **FROST TITAN** (3× a MEGA Titan) + MEGA ACID SPITTER + MEGA JUMP SPIDER |
+| 8 | **THE FROST WYRM** — only on Level 20, 40, 60… (see below) |
 
 Down here the bosses hunt **you**, not your crops, and each species comes at you its own way — see
 **Bugs that fight back** below. There's no health bar to lose. Instead each wave has a **75 second
@@ -263,11 +264,18 @@ Rewards stack up fast:
 health and every payout 1.45× bigger, forever. Since the rewards climb faster than the health, a
 deep lair is where the real money is — as long as you keep upgrading your weapon.
 
-**Level 20** is the prize: clear it and the lair hands over a **Frost Wyrm** — a pet big enough to
-*ride*. Press **Y** to climb on. Riding is nearly twice as fast, you sit high above the crops, and
-**E** breathes a 12m cone of frost instead of firing your weapon. The breath does millions of
-damage and climbs 55% per wyrm level, so it just keeps up as the lair gets deeper. Press **Y**
-again to hop down. The wyrm never hatches from an egg — Level 20 is the only way to get one. The lair closes for 20 minutes after a clear (8 minutes if you
+**Every twentieth Level ends with a champion** instead of the usual last wave: the **FROST WYRM**
+itself, flying above the ice, keeping its distance and breathing frost that costs you 10 seconds a
+hit. It has 1.6× a Frost Titan's health and you get a **two minute** clock for it alone.
+
+**You have to beat it.** Win and the wyrm bows to you: a pet big enough to *ride*. Press **Y** to
+climb on. Riding is nearly twice as fast, you sit high above the crops, and **E** breathes a 12m
+cone of frost instead of firing your weapon. Press **Y** again to hop down. It never hatches from
+an egg — beating the champion is the only way to get one.
+
+Lose to it and you get nothing: the run freezes, the level is *not* cleared, and Level 20 is still
+sitting there waiting for you. Beat it again at Level 40, 60, 80 and so on and your own wyrm
+**gains a level** — each one is +55% breath damage, forever. The lair closes for 20 minutes after a clear (8 minutes if you
 froze out or left early), and raids, thieves and drake lures are all paused while you're
 underground — your garden keeps growing, and your pets come down with you.
 

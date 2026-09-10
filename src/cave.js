@@ -56,8 +56,29 @@ export function waveReward(wave, earned, depth) {
 
 export function goldenReward(depth) { return 10 + 5 * depth; }
 
-/** Clear this level and the lair hands over a rideable Frost Wyrm. */
-export const MOUNT_LEVEL = 20;
+/**
+ * Every twentieth Level ends with a champion instead of the usual last wave:
+ * the FROST WYRM itself. Beat it at Level 20 and you get to ride it; beat it
+ * again at 40, 60, 80… and yours grows a level.
+ */
+export const CHAMPION_EVERY = 20;
+export const MOUNT_LEVEL = CHAMPION_EVERY;
+export const CHAMPION_SECONDS = 120;
+
+/** True on a Level that ends with the wyrm. `depth` is Level − 1. */
+export function isChampionLevel(depth) { return (depth + 1) % CHAMPION_EVERY === 0; }
+
+/** The wyrm you fight. Flies, keeps its distance and breathes frost. */
+export function championSpec(depth) {
+  const base = FROST_TITAN;
+  return {
+    id: 'boss_wyrm', name: 'FROST WYRM', model: 'wyrm', boss: true, champion: true,
+    hp: Math.round(base.hp * 1.6 * Math.pow(HP_PER_LEVEL, depth)),
+    bounty: Math.round(base.bounty * 4 * Math.pow(PAY_PER_LEVEL, depth)),
+    speed: 1.6, size: 2.4, color: 0x1565c0, spitColor: 0xbfe6ff,
+    attack: 'acid', hit: 10, reach: 17, fly: true,
+  };
+}
 
 /** Direction from the cave mouth toward the middle of the garden. */
 const FACING = Math.atan2(-MOUTH.x, -MOUTH.z);
@@ -322,7 +343,13 @@ export class Lair {
     this.timeLeft = 0;
     this.breakLeft = 0;
     this.cleared = 0;
+    this.runId = 0;          // bumped per visit, so stale timers can't touch a new run
   }
+
+  /** How many waves this Level runs — one more on a champion Level. */
+  get totalWaves() { return WAVES.length + (isChampionLevel(this.depth) ? 1 : 0); }
+
+  get championWave() { return isChampionLevel(this.depth) ? this.totalWaves : -1; }
 
   get arenaBugs() { return this.bugs.bugs.filter(b => b.arena); }
 
@@ -335,6 +362,7 @@ export class Lair {
 
   enter(depth) {
     this.inside = true;
+    this.runId++;
     this.depth = depth;
     this.wave = 0;
     this.cleared = 0;
@@ -345,6 +373,16 @@ export class Lair {
   startWave(n) {
     this.wave = n;
     this.phase = 'fight';
+
+    if (n === this.championWave) {
+      this.timeLeft = CHAMPION_SECONDS;
+      const bug = this.bugs.spawnHunter(championSpec(this.depth),
+        CAVE_ORIGIN.x, CAVE_ORIGIN.z - 22);
+      bug.arena = true;
+      this.hooks.onChampion?.(this.depth + 1);
+      return;
+    }
+
     this.timeLeft = WAVE_SECONDS;
     const ids = WAVES[n - 1];
     ids.forEach((id, i) => {
@@ -373,7 +411,7 @@ export class Lair {
       if (this.arenaBugs.length === 0) {
         this.cleared = this.wave;
         this.hooks.onWaveClear?.(this.wave, waveReward(this.wave, this.hooks.earned(), this.depth));
-        if (this.wave >= WAVES.length) {
+        if (this.wave >= this.totalWaves) {
           this.phase = 'won';
           this.hooks.onClear?.(this.depth);
         } else {
@@ -398,13 +436,23 @@ export class Lair {
   /** HUD text. */
   label() {
     if (this.phase === 'break') {
-      return this.wave === 0
-        ? `❄️ GNOME'S ICE LAIR · Level ${this.depth + 1} · get ready…`
+      if (this.wave === 0) {
+        return `❄️ GNOME'S ICE LAIR · Level ${this.depth + 1}${
+          isChampionLevel(this.depth) ? ' · the FROST WYRM is waiting' : ''} · get ready…`;
+      }
+      return this.wave + 1 === this.championWave
+        ? `❄️ Wave ${this.wave} cleared! · the FROST WYRM wakes in ${Math.ceil(this.breakLeft)}`
         : `❄️ Wave ${this.wave} cleared! · next in ${Math.ceil(this.breakLeft)}`;
     }
     if (this.phase === 'fight') {
       const s = Math.max(0, Math.ceil(this.timeLeft));
-      return `❄️ ICE LAIR · Wave ${this.wave}/${WAVES.length} · ⏱ ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      const clock = `⏱ ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      if (this.wave === this.championWave) {
+        return this.depth + 1 === MOUNT_LEVEL
+          ? `🐉 FROST WYRM · beat it and you can ride it! · ${clock}`
+          : `🐉 FROST WYRM · beat it and yours grows a level · ${clock}`;
+      }
+      return `❄️ ICE LAIR · Wave ${this.wave}/${this.totalWaves} · ${clock}`;
     }
     if (this.phase === 'won') return `🏆 LAIR CLEARED · Level ${this.depth + 1} · walk out through the arch`;
     if (this.phase === 'frozen') return `🧊 The lair froze over · ${this.cleared} wave${this.cleared === 1 ? '' : 's'} cleared`;
