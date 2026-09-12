@@ -90,6 +90,13 @@ kbd {
   color: #ffd9d2; border-radius: 12px; padding: 8px 18px; font-size: 15px;
   box-shadow: 0 8px 26px rgba(0,0,0,0.4); animation: pop 0.25s ease both;
 }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip {
+  background: rgba(255,255,255,0.06); border: 1px solid var(--line); border-left-width: 3px;
+  color: var(--ink); border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+}
+.chip:hover { background: rgba(255,255,255,0.14); }
 .lvl {
   font-size: 11px; font-weight: 800; letter-spacing: 0.5px; color: #0d1a12;
   background: var(--gold); border-radius: 6px; padding: 1px 6px; vertical-align: middle;

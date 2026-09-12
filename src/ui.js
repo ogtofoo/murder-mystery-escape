@@ -638,6 +638,21 @@ export class UI {
       rarer seeds make better treats, and a happy pet works up to 60% harder
       <button class="buy sell" id="alloutbtn" style="margin-left:8px">take all out</button>
       <button class="buy sell" id="allinbtn">put all away</button></div>`;
+
+    // One tap to take out just one kind, for when the drawer is full of pets.
+    const kinds = [...new Set(state.pets.map(p => p.id))]
+      .filter(id => !PETS_BY_ID[id].mount)
+      .sort((a, b) => TIERS[PETS_BY_ID[b].tier].order - TIERS[PETS_BY_ID[a].tier].order);
+    if (kinds.length > 1) {
+      html += `<div class="tierhead">Take out only one kind${
+        state.pets.some(p => PETS_BY_ID[p.id].mount) ? ' <span style="opacity:.7">(your wyrm stays with you)</span>' : ''}
+        <div class="chips">${kinds.map(id => {
+          const spec = PETS_BY_ID[id];
+          const n = state.pets.filter(p => p.id === id).length;
+          return `<button class="chip" data-only="${id}" style="border-color:${TIERS[spec.tier].css}">
+            ${spec.name} <b>×${n}</b></button>`;
+        }).join('')}</div></div>`;
+    }
     if (!state.pets.length) {
       html += `<div class="row"><div class="stripe" style="background:#666"></div>
         <div><div class="name">No pets yet</div>
@@ -671,6 +686,9 @@ export class UI {
     this.el.body.innerHTML = html;
     this.el.body.querySelector('#alloutbtn')?.addEventListener('click', () => { this.hooks.equipAll(true); this.renderShop(); });
     this.el.body.querySelector('#allinbtn')?.addEventListener('click', () => { this.hooks.equipAll(false); this.renderShop(); });
+    for (const b of this.el.body.querySelectorAll('[data-only]')) {
+      b.addEventListener('click', () => { this.hooks.equipOnly(b.dataset.only); this.renderShop(); });
+    }
     for (const b of this.el.body.querySelectorAll('[data-egg]')) {
       b.addEventListener('click', () => this.hooks.buyEgg(b.dataset.egg));
     }

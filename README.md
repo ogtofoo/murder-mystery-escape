@@ -27,7 +27,7 @@ python3 -m http.server 8777
 | Hold `E` | With the shovel out: dig up the plant you're looking at |
 | `C` / `T` | Whistle your pets over / feed the nearest one a seed |
 | `Y` | Climb on or off your **Frost Wyrm** (once you have beaten one) |
-| Jump twice | Thump the ground: your buried wyrm tunnels over and erupts beside you |
+| Jump twice | Everything wyrm: call it up out of the ground, climb on, hop off |
 | `B` | Seed shop (seeds, packs, almanac) |
 | `V` | Toggle **first person ↔ third person** (first person uses a wider 90° field of view) |
 | `Esc` | Close the shop / back to the menu |
@@ -43,12 +43,13 @@ the game switches its on-screen hints over as soon as it sees one.
 | Right stick | Look |
 | `A` | Plant / harvest / buy plot / confirm |
 | `B` | Toggle first ↔ third person (closes the shop when it's open) |
-| `X` | Jump — **tap it twice** to call your Frost Wyrm up out of the ground |
+| `X` | Jump — **tap it twice** for everything wyrm: call it up, climb on, hop off |
 | `Y` | Open the seed shop |
 | `RT` / `LT` / `L3` | Sprint |
 | `LB` / `RB` | Previous / next seed — and previous / next shop tab |
 | D-pad or left stick | Move the highlight through the shop list |
-| `R3` | **Ride / hop off your Frost Wyrm.** Without one it snaps the camera close / far |
+| `A` | Also climbs onto the wyrm when you are standing beside it |
+| `R3` | Ride / hop off as well, on pads that report it. Without a wyrm it snaps the camera close / far |
 | D-pad ↓ | Take out / put away the shovel (hold `A` to dig) |
 | D-pad → / `L3` | Feed the nearest pet / whistle them over |
 | `Start` | Menu |
@@ -224,9 +225,10 @@ Once you've found the lair, chasing a gnome all the way to his door while it is 
 makes him leave the boulder rolled aside — **the lair reopens immediately**. With a hound out, that
 turns a 20 minute wait into another run.
 
-**Testing tip:** open the game as `http://localhost:8777/?gnome` and a gnome turns up a few seconds
+**Testing tips:** open the game as `http://localhost:8777/?gnome` and a gnome turns up a few seconds
 after you press Play and keeps coming — day or night, ripe crops or not — until you take `?gnome`
-back out of the address.
+back out of the address. `?wyrm` hands you a Frost Wyrm on the spot, so you can try the mount and
+the controller without first beating twenty waves.
 
 Press **E** at the glowing cave mouth to go in. Inside is a huge ice cavern — crystal spires,
 stalactites, drifting snow, the gnome's frozen throne and his hoard of coins — and a **twenty wave
@@ -276,8 +278,10 @@ clock for it alone.
 exactly like the one you fought — when you are not on it, it **burrows where you left it** and waits
 underground, leaving a mound of churned earth and frost shards on the surface.
 
-**Jump twice** to thump the ground and it tunnels over and erupts beside you. Press **Y** to climb
-on (that calls it too, if it is still underground, and puts you on the moment it surfaces). You
+**Jump twice** to thump the ground and it tunnels over and erupts beside you. Jump twice again to
+climb on, and again to hop off — one control for the whole thing, on the keyboard or a pad. Walking
+up to it and pressing **E** works too, as does **Y** (which calls it first if it is still
+underground and puts you on the moment it surfaces). You
 stand on its back with its maw out in front of you. Riding is nearly twice as fast, you sit high
 above the crops, and **E** breathes a 12m cone of frost instead of firing your weapon. Press **Y**
 again to hop down, and it digs itself back in on the spot. Leave it up too long without riding and
@@ -350,6 +354,11 @@ faster, learns faster, and works **up to 60% harder** at its ability — and hap
 slowly, so it's worth topping up. It's also a good use for the drawer full of common seeds.
 
 Pets level up just by being out, and every level makes their ability stronger.
+
+Once the drawer is full, the Pets tab has **take all out**, **put all away**, and a row of chips —
+one per kind you own, with how many you have. Tap **Star Sprite ×3** and only your Star Sprites come
+out; everything else goes away. Your Frost Wyrm always stays with you, so a filter can never leave
+you without a ride.
 
 The **Gnome Hound** is the odd one out: instead of helping the garden it works against it a
 little, calling a crop-stealing Garden Gnome out of the hedgerow every couple of minutes at

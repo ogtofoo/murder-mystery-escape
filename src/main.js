@@ -43,6 +43,9 @@ let menuSuppressUntil = 0;
 // ?gnome in the address bar: a Garden Gnome turns up right away and keeps
 // coming, day or night, ripe crops or not — for testing the lair.
 const DEBUG_GNOME = new URLSearchParams(location.search).has('gnome');
+// ?wyrm hands over a Frost Wyrm straight away, for trying the mount and the
+// controller without first beating twenty waves.
+const DEBUG_WYRM = new URLSearchParams(location.search).has('wyrm');
 let escClosedShop = false;
 
 const REACH = 6.5;
@@ -92,6 +95,17 @@ const ui = new UI({
   equipAll: out => {
     state.equipped = out ? state.pets.map(p => p.uid) : [];
     syncPets(); save();
+  },
+  equipOnly: id => {
+    // Everything of that kind, plus your wyrm — putting a mount away out from
+    // under you would only be confusing.
+    const keep = state.pets.filter(p => p.id === id || PETS_BY_ID[p.id]?.mount);
+    state.equipped = keep.map(p => p.uid);
+    syncPets();
+    const n = keep.filter(p => p.id === id).length;
+    ui.toast(`🐾 Out with the <b>${PETS_BY_ID[id].name}</b>s only — ${n} of them.`);
+    ui.refresh();
+    save();
   },
   callPets: () => callPets(),
   releasePet: uid => {
@@ -1633,6 +1647,10 @@ function updatePrompt() {
     show(`<b>[E]</b> Browse the seed shop <span class="sub">seeds, packs and the almanac</span>`);
     return;
   }
+  if (mountWithinReach()) {
+    show(`<b>[E]</b> Climb onto your Frost Wyrm <span class="sub">or jump twice · Y also works</span>`);
+    return;
+  }
   if (nearPet) {
     // With nothing else to say, give the pet the whole prompt rather than
     // repeating the one-line version underneath it.
@@ -1670,6 +1688,10 @@ function interact() {
     else ui.toast(`${PLANTS_BY_ID[plot.plantId].name} is still growing.`);
     return;
   }
+  // Standing next to your wyrm, E climbs on.
+  const beside = mountWithinReach();
+  if (beside) { mountUp(beside); return; }
+
   // Decorations drop on the grass wherever you are looking.
   if (PROPS_BY_ID[ui.selected]) {
     const spot = groundAim();
@@ -1688,13 +1710,45 @@ function interact() {
 let ridingUid = null;
 let wantRide = false;         // waiting for a called worm to surface
 let lastJumpAt = 0;
+let wyrmHintShown = false;    // only explain the empty double jump once
 
-/** Two jumps in quick succession thump the ground and call the worm up. */
+/**
+ * Two jumps in quick succession are the whole wyrm control: thump the ground
+ * to call it, climb on once it is up, and hop off again. Jump is the one
+ * button every pad reports, so this works even where R3 never arrives.
+ */
 function noteJump() {
   const now = performance.now();
   const double = now - lastJumpAt < 650;
   lastJumpAt = double ? 0 : now;
-  if (double) callMount();
+  if (!double) return;
+
+  // Nothing to ride? Say so once, rather than leaving a silent double jump.
+  if (!state.pets.some(p => PETS_BY_ID[p.id]?.mount)) {
+    if (!wyrmHintShown) {
+      wyrmHintShown = true;
+      ui.toast('🐉 You have no Frost Wyrm yet — beat <b>wave 20</b> of the Ice Lair to win one.');
+    }
+    return;
+  }
+
+  if (ridingUid !== null) { dismount(); return; }
+  const mount = bestMount();
+  if (mount && mount.mode === 'up'
+      && Math.hypot(mount.mesh.position.x - player.pos.x, mount.mesh.position.z - player.pos.z) < 9) {
+    mountUp(mount);
+    return;
+  }
+  callMount();
+}
+
+/** The wyrm standing next to you, close enough to climb onto. */
+function mountWithinReach(range = 6) {
+  if (ridingUid !== null) return null;
+  const mount = bestMount();
+  if (!mount || mount.mode !== 'up') return null;
+  const d = Math.hypot(mount.mesh.position.x - player.pos.x, mount.mesh.position.z - player.pos.z);
+  return d <= range ? mount : null;
 }
 
 /** Call the worm: it tunnels over and erupts beside you. */
@@ -1944,7 +1998,14 @@ function updateGamepad(dt) {
   // flips the camera in and out like it always did.
   if (pressed.has(BTN.R3)) {
     if (state.pets.some(p => PETS_BY_ID[p.id]?.mount)) toggleRide();
-    else player.camDistance = player.camDistance > 4 ? 3.2 : 6.0;
+    else {
+      // No wyrm yet, so it still snaps the camera — but say why once.
+      player.camDistance = player.camDistance > 4 ? 3.2 : 6.0;
+      if (!wyrmHintShown) {
+        wyrmHintShown = true;
+        ui.toast('🐉 Nothing to ride yet — beat <b>wave 20</b> of the Ice Lair. R3 moves the camera until then.');
+      }
+    }
   }
   if (pressed.has(BTN.START) || pressed.has(BTN.BACK)) { document.exitPointerLock?.(); ui.showMenu(true); }
 }
@@ -2166,7 +2227,7 @@ function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
 window.game = { build: BUILD_LABEL, sky, petPack, thieves, cave, mouth, lair, enterCave, leaveCave, openPack,
-                toggleRide, dismount, breathe, callMount, noteJump, upgradeWeapon, weaponLevel, weaponDamage, nextWeaponCost,
+                toggleRide, dismount, breathe, callMount, noteJump, mountWithinReach, upgradeWeapon, weaponLevel, weaponDamage, nextWeaponCost,
                 riding: () => ridingUid, PETS_BY_ID, BUGS_BY_ID, WAVES, rollBug,
                 gnomeCredit: () => gnomeCredit, updateGnomeLure,
                 sendGnome: () => thieves.spawn(state.owned, state.prestiges, 'gnome', 0), callPets, refreshQuests, refreshShelf, shelfCount, isNight, questDone, questProgress, claimQuest, updateCarnivores, updateLure, petPower,
@@ -2188,6 +2249,15 @@ ui.refresh();
 document.getElementById('loading').remove();
 tick();
 
+if (DEBUG_WYRM && !state.pets.some(p => PETS_BY_ID[p.id]?.mount)) {
+  const spec = PETS.find(p => p.mount);
+  const pet = { uid: state.nextPetUid++, id: spec.id, level: 1, xp: 0, happy: 100 };
+  state.pets.push(pet);
+  state.equipped.push(pet.uid);
+  syncPets();
+  save();
+  ui.toast(`🧪 <b>Wyrm debug mode</b> — a <b>${spec.name}</b> is buried nearby. <b>Jump twice</b> to call it.`, 'gold');
+}
 if (DEBUG_GNOME) ui.toast('🧪 <b>Gnome debug mode</b> — gnomes keep coming until you find the lair. Remove <b>?gnome</b> from the address to stop.', 'gold');
 
 // Gentle nudge for a brand-new gardener.
