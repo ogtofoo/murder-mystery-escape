@@ -26,7 +26,8 @@ python3 -m http.server 8777
 | `G` | Take out / put away the shovel |
 | Hold `E` | With the shovel out: dig up the plant you're looking at |
 | `C` / `T` | Whistle your pets over / feed the nearest one a seed |
-| `Y` | Climb on or off your **Frost Wyrm** (once the Ice Lair has given you one) |
+| `Y` | Climb on or off your **Frost Wyrm** (once you have beaten one) |
+| Jump twice | Thump the ground: your buried wyrm tunnels over and erupts beside you |
 | `B` | Seed shop (seeds, packs, almanac) |
 | `V` | Toggle **first person ↔ third person** (first person uses a wider 90° field of view) |
 | `Esc` | Close the shop / back to the menu |
@@ -42,12 +43,12 @@ the game switches its on-screen hints over as soon as it sees one.
 | Right stick | Look |
 | `A` | Plant / harvest / buy plot / confirm |
 | `B` | Toggle first ↔ third person (closes the shop when it's open) |
-| `X` | Jump |
+| `X` | Jump — **tap it twice** to call your Frost Wyrm up out of the ground |
 | `Y` | Open the seed shop |
 | `RT` / `LT` / `L3` | Sprint |
 | `LB` / `RB` | Previous / next seed — and previous / next shop tab |
 | D-pad or left stick | Move the highlight through the shop list |
-| `R3` | Snap the third-person camera close / far |
+| `R3` | **Ride / hop off your Frost Wyrm.** Without one it snaps the camera close / far |
 | D-pad ↓ | Take out / put away the shovel (hold `A` to dig) |
 | D-pad → / `L3` | Feed the nearest pet / whistle them over |
 | `Start` | Menu |
@@ -271,11 +272,18 @@ for a few seconds, spitting frost shards, and that is your window to hurt it bef
 Watch the ridge and keep moving. It has 1.6× a Frost Titan's health and you get a **two minute**
 clock for it alone.
 
-**You have to beat it.** Win and the worm bows to you: a mount you ride like a Fremen. Press **Y**
-to climb on and you stand on its back while it swims through the ground, its maw out in front of
-you. Riding is nearly twice as fast, you sit high above the crops, and **E** breathes a 12m cone of
-frost instead of firing your weapon. Press **Y** again to hop down. It never hatches from an egg —
-reaching wave 20 and beating it is the only way to get one.
+**You have to beat it.** Win and the worm bows to you: a mount you ride like a Fremen. It behaves
+exactly like the one you fought — when you are not on it, it **burrows where you left it** and waits
+underground, leaving a mound of churned earth and frost shards on the surface.
+
+**Jump twice** to thump the ground and it tunnels over and erupts beside you. Press **Y** to climb
+on (that calls it too, if it is still underground, and puts you on the moment it surfaces). You
+stand on its back with its maw out in front of you. Riding is nearly twice as fast, you sit high
+above the crops, and **E** breathes a 12m cone of frost instead of firing your weapon. Press **Y**
+again to hop down, and it digs itself back in on the spot. Leave it up too long without riding and
+it burrows again on its own.
+
+It never hatches from an egg — reaching wave 20 and beating it is the only way to get one.
 
 Lose to it and you get nothing: the run freezes, the Level is *not* cleared, and you start the
 twenty waves again next time. Beat it on a later run and your own wyrm **gains a level** — each

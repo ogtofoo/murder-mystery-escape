@@ -178,6 +178,26 @@ const SHAPES = {
     // Where a rider sits: on the broad back, a few segments behind the maw.
     g.userData.saddle = { z: -3.9, y: 1.05 + 1.5 * 0.52 };
 
+    // What it leaves on the surface while it is burrowed: a mound of churned
+    // ground with shards of frost around it.
+    const mound = new THREE.Group();
+    const churnMat = new THREE.MeshStandardMaterial({ color: 0x6b5138, flatShading: true, roughness: 0.9 });
+    const frostMat = new THREE.MeshStandardMaterial({ color: 0xbfe6ff, flatShading: true, roughness: 0.3,
+      emissive: 0x2fb8ff, emissiveIntensity: 0.35 });
+    const hump = new THREE.Mesh(new THREE.ConeGeometry(1.5, 0.9, 8), churnMat);
+    hump.position.y = 0.4;
+    mound.add(hump);
+    for (let i = 0; i < 8; i++) {
+      const ang = (i / 8) * Math.PI * 2;
+      const shard = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.55 + Math.random() * 0.5, 4), frostMat);
+      shard.position.set(Math.cos(ang) * 1.35, 0.25, Math.sin(ang) * 1.35);
+      shard.rotation.set((Math.random() - 0.5) * 0.7, 0, (Math.random() - 0.5) * 0.7);
+      mound.add(shard);
+    }
+    mound.visible = false;
+    g.add(mound);
+    g.userData.mound = mound;
+
     // The maw: a dark throat ringed with teeth behind a heavy lip.
     const throat = part(ball(), eyeMat(), [0, 1.55, 1.1], [1.25, 1.25, 0.7]);
     g.add(throat);
@@ -220,9 +240,11 @@ export function buildPet(spec) {
   const [cA, cB] = spec.colors;
   SHAPES[spec.shape](g, spec, m(cA, spec.tier, 0.18, spec.glow), m(cB, spec.tier, 0.18, spec.glow));
   const saddle = g.userData.saddle || null;
+  const mound = g.userData.mound || null;
   g.userData = {
     spec,
     saddle,
+    mound,
     flyer: FLYERS.has(spec.shape),
     wings: g.children.filter(c => c.userData.wing),
     spinners: g.children.filter(c => c.userData.spin),
@@ -263,6 +285,8 @@ export class PetPack {
   nearest(x, z, radius = 4) {
     let best = null, bestD = radius;
     for (const p of this.pets) {
+      // A buried mount is not something you can walk up to and feed.
+      if (p.spec.mount && p.mode !== 'up' && p.mode !== 'ridden') continue;
       const d = Math.hypot(p.mesh.position.x - x, p.mesh.position.z - z);
       if (d < bestD) { best = p; bestD = d; }
     }
@@ -291,7 +315,7 @@ export class PetPack {
       const a = (i / Math.max(1, this.pets.length)) * Math.PI * 2;
       p.mesh.position.set(x + Math.cos(a) * 2.5, p.mesh.position.y, z + Math.sin(a) * 2.5);
       p.target = null;
-      p.mode = 'roam';
+      p.mode = p.spec.mount ? 'burrowed' : 'roam';
       p.wait = 0;
     });
   }
@@ -305,23 +329,8 @@ export class PetPack {
       const u = p.mesh.userData;
       const happy = (happiness[p.uid] || 0) / 100;
 
-      // A mount you are sitting on just carries you around. The worm swims
-      // through the ground, so it only bobs — the floor hides the rest.
-      if (p.mode === 'ridden') {
-        if (this.rider) {
-          // Line the saddle up under the rider, so the head rides out in front.
-          const s = u.saddle;
-          const yaw = this.rider.yaw;
-          const off = s ? -s.z : 0;
-          p.mesh.position.set(this.rider.x + Math.sin(yaw) * off,
-                              Math.sin(t * 2) * 0.12,
-                              this.rider.z + Math.cos(yaw) * off);
-          p.mesh.rotation.y = yaw;
-          p.mesh.rotation.x = Math.sin(t * 1.3) * 0.05;
-        }
-        for (const w of u.wings) w.rotation.z = Math.sin(t * 9 + u.phase) * 0.55 * w.userData.wing;
-        return;
-      }
+      // Mounts don't potter about the garden — they burrow and wait.
+      if (p.spec.mount) { this.updateMount(p, dt, t); return; }
 
       // A hound drops everything to run down a fleeing gnome.
       const hunting = this.chase && p.spec.ability === 'gnome' && !called && p.mode !== 'eat';
@@ -373,6 +382,119 @@ export class PetPack {
       for (const w of u.wings) w.rotation.z = Math.sin(t * (u.flyer ? 22 : 8) + u.phase) * 0.5 * w.userData.wing;
       for (const sp of u.spinners) sp.rotation.y += sp.userData.spin * dt;
     });
+  }
+
+  /**
+   * A mount lives underground when you aren't on it. It burrows where you left
+   * it, tunnels over when you call, erupts beside you, and digs back in if you
+   * don't climb on.
+   */
+  updateMount(p, dt, t) {
+    const u = p.mesh.userData;
+    const DEEP = -9, RISE = 0.85, DIG = 0.7, IDLE_OUT = 25;
+    if (!p.mode || p.mode === 'roam' || p.mode === 'come') { p.mode = 'burrowed'; p.timer = 0; }
+
+    const show = on => {
+      for (const c of p.mesh.children) {
+        if (c === u.mound) continue;
+        c.visible = on;
+      }
+      if (u.mound) {
+        u.mound.visible = !on;
+        u.mound.position.y = 0.05 - p.mesh.position.y;   // ride the surface
+      }
+    };
+
+    if (p.mode === 'ridden') {
+      show(true);
+      if (this.rider) {
+        // Line the saddle up under the rider, so the head rides out in front.
+        const s = u.saddle;
+        const yaw = this.rider.yaw;
+        const off = s ? -s.z : 0;
+        p.mesh.position.set(this.rider.x + Math.sin(yaw) * off,
+                            Math.sin(t * 2) * 0.12,
+                            this.rider.z + Math.cos(yaw) * off);
+        p.mesh.rotation.y = yaw;
+        p.mesh.rotation.x = Math.sin(t * 1.3) * 0.05;
+      }
+      return;
+    }
+
+    if (p.mode === 'burrowed') {
+      p.mesh.position.y = DEEP;
+      p.mesh.rotation.x = 0;
+      show(false);
+      return;
+    }
+
+    if (p.mode === 'tunnel') {
+      const dx = p.target.x - p.mesh.position.x, dz = p.target.z - p.mesh.position.z;
+      const d = Math.hypot(dx, dz) || 0.001;
+      p.mesh.position.y = DEEP;
+      p.mesh.rotation.x = 0;
+      p.mesh.rotation.y = dampAngle(p.mesh.rotation.y, Math.atan2(dx, dz), 6, dt);
+      show(false);
+      if (d < 4) { p.mode = 'surfacing'; p.timer = RISE; return; }
+      const v = 14 * dt;
+      p.mesh.position.x += (dx / d) * Math.min(v, d);
+      p.mesh.position.z += (dz / d) * Math.min(v, d);
+      return;
+    }
+
+    if (p.mode === 'surfacing') {
+      p.timer -= dt;
+      const k = 1 - Math.max(0, p.timer) / RISE;
+      p.mesh.position.y = DEEP + (0 - DEEP) * k;
+      p.mesh.rotation.x = -1.0 * (1 - k);
+      show(true);
+      if (p.timer <= 0) {
+        p.mode = 'up';
+        p.timer = IDLE_OUT;
+        p.mesh.position.y = 0;
+        p.mesh.rotation.x = 0;
+        this.onSurfaced?.(p);
+      }
+      return;
+    }
+
+    if (p.mode === 'up') {
+      p.mesh.position.y = Math.sin(t * 1.8) * 0.12;
+      p.mesh.rotation.x = Math.sin(t * 1.2) * 0.04;
+      show(true);
+      p.timer -= dt;
+      if (p.timer <= 0) { p.mode = 'digging'; p.timer = DIG; }
+      return;
+    }
+
+    // Digging back in.
+    p.timer -= dt;
+    const k = 1 - Math.max(0, p.timer) / DIG;
+    p.mesh.position.y = (DEEP - 0) * k;
+    p.mesh.rotation.x = 0.9 * k;
+    show(true);
+    if (p.timer <= 0) { p.mode = 'burrowed'; show(false); }
+  }
+
+  /** Call the mount over: it tunnels to a spot and erupts there. */
+  summonMount(x, z) {
+    const m = this.mounts()[0];
+    if (!m || m.mode === 'ridden') return null;
+    m.target = { x, z };
+    // Already up and close enough? Leave it be, just reset its patience.
+    if (m.mode === 'up' && Math.hypot(m.mesh.position.x - x, m.mesh.position.z - z) < 7) {
+      m.timer = 25;
+      return m;
+    }
+    m.mode = 'tunnel';
+    return m;
+  }
+
+  /** Put the mount back underground, where it stands. */
+  burrowMount(p) {
+    if (!p) return;
+    p.mode = 'digging';
+    p.timer = 0.7;
   }
 
   /** The pet with this uid, if it is out. */

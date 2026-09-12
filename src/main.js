@@ -727,6 +727,7 @@ let petCallUntil = 0;
 
 /** Whistle: every pet drops what it's doing and trots over. */
 function callPets() {
+  if (ridingUid === null) callMount();
   if (!petPack.pets.length) { ui.toast('No pets are out right now.', 'bad'); sfx.deny(); return; }
   petCallUntil = performance.now() + 6000;
   ui.toast(`🐾 Here, ${petPack.pets.length === 1 ? 'boy' : 'everyone'}!`);
@@ -1685,6 +1686,37 @@ function interact() {
 
 /** The Frost Wyrm you are sitting on, if any. */
 let ridingUid = null;
+let wantRide = false;         // waiting for a called worm to surface
+let lastJumpAt = 0;
+
+/** Two jumps in quick succession thump the ground and call the worm up. */
+function noteJump() {
+  const now = performance.now();
+  const double = now - lastJumpAt < 650;
+  lastJumpAt = double ? 0 : now;
+  if (double) callMount();
+}
+
+/** Call the worm: it tunnels over and erupts beside you. */
+function callMount(forRide = false) {
+  const mount = bestMount();
+  if (!mount) {
+    if (forRide) {
+      if (state.pets.some(p => PETS_BY_ID[p.id]?.mount)) ui.toast('Your wyrm is put away — take it out in the Pets tab.', 'bad');
+      else ui.toast('You have nothing to ride yet. Beat <b>wave 20</b> of the Ice Lair.', 'bad');
+      sfx.deny();
+    }
+    return null;
+  }
+  if (ridingUid !== null) return mount;
+  const called = petPack.summonMount(player.pos.x, player.pos.z);
+  if (called && called.mode === 'tunnel') {
+    ui.toast('🥁 You thump the ground — <b>the Frost Wyrm is coming</b>…', 'gold');
+    sfx.roar();
+    gamepad.rumble(0.4, 240);
+  }
+  return called;
+}
 
 function bestMount() {
   const mounts = petPack.mounts();
@@ -1697,13 +1729,22 @@ function bestMount() {
 
 function toggleRide() {
   if (ridingUid !== null) { dismount(); return; }
-  const mount = bestMount();
-  if (!mount) {
-    if (state.pets.some(p => PETS_BY_ID[p.id]?.mount)) ui.toast('Your wyrm is put away — take it out in the Pets tab.', 'bad');
-    else ui.toast('You have nothing to ride yet. Clear <b>Ice Lair Level 20</b>.', 'bad');
-    sfx.deny();
-    return;
-  }
+  const mount = callMount(true);
+  if (!mount) return;
+  // Underground or on its way? Climb on the moment it breaks the surface.
+  if (mount.mode !== 'up') { wantRide = true; return; }
+  mountUp(mount);
+}
+
+petPack.onSurfaced = mount => {
+  if (wantRide && ridingUid === null) { mountUp(mount); return; }
+  ui.toast(`🐉 The <b>${mount.spec.name}</b> bursts out of the ground beside you — press <b>Y</b> to ride.`, 'gold');
+  sfx.roar();
+  gamepad.rumble(0.5, 260);
+};
+
+function mountUp(mount) {
+  wantRide = false;
   ridingUid = mount.uid;
   mount.mode = 'ridden';
   petPack.rider = { x: player.pos.x, z: player.pos.z, yaw: player.yaw };
@@ -1716,11 +1757,12 @@ function toggleRide() {
 
 function dismount() {
   const mount = ridingUid !== null ? petPack.byUid(ridingUid) : null;
-  if (mount) { mount.mode = 'roam'; mount.target = null; mount.wait = 0; }
   ridingUid = null;
+  wantRide = false;
   petPack.rider = null;
   player.setRiding(null);
-  ui.toast('You hop down.');
+  if (mount) petPack.burrowMount(mount);
+  ui.toast('You hop down — the wyrm digs itself back in. <b>Jump twice</b> to call it.');
 }
 
 /** Keep the mount underneath you, and drop you off if it is put away. */
@@ -1793,6 +1835,7 @@ window.addEventListener('keydown', e => {
     case 'KeyC': callPets(); break;
     case 'KeyT': feedNearestPet(); break;
     case 'KeyY': toggleRide(); break;
+    case 'Space': noteJump(); break;
     default:
       if (/^Digit[1-9]$/.test(e.code)) ui.selectIndex(Number(e.code.slice(5)) - 1);
   }
@@ -1896,7 +1939,13 @@ function updateGamepad(dt) {
   if (pressed.has(BTN.LEFT)) toggleWeapon();
   if (pressed.has(BTN.RIGHT)) feedNearestPet();
   if (pressed.has(BTN.L3)) callPets();
-  if (pressed.has(BTN.R3)) { player.camDistance = player.camDistance > 4 ? 3.2 : 6.0; }
+  if (pressed.has(BTN.X)) noteJump();
+  // Right stick click rides the wyrm once you have one; otherwise it still
+  // flips the camera in and out like it always did.
+  if (pressed.has(BTN.R3)) {
+    if (state.pets.some(p => PETS_BY_ID[p.id]?.mount)) toggleRide();
+    else player.camDistance = player.camDistance > 4 ? 3.2 : 6.0;
+  }
   if (pressed.has(BTN.START) || pressed.has(BTN.BACK)) { document.exitPointerLock?.(); ui.showMenu(true); }
 }
 
@@ -2117,7 +2166,7 @@ function easeOut(x) { return 1 - Math.pow(1 - x, 2); }
 
 // Handy for tinkering from the devtools console.
 window.game = { build: BUILD_LABEL, sky, petPack, thieves, cave, mouth, lair, enterCave, leaveCave, openPack,
-                toggleRide, dismount, breathe, upgradeWeapon, weaponLevel, weaponDamage, nextWeaponCost,
+                toggleRide, dismount, breathe, callMount, noteJump, upgradeWeapon, weaponLevel, weaponDamage, nextWeaponCost,
                 riding: () => ridingUid, PETS_BY_ID, BUGS_BY_ID, WAVES, rollBug,
                 gnomeCredit: () => gnomeCredit, updateGnomeLure,
                 sendGnome: () => thieves.spawn(state.owned, state.prestiges, 'gnome', 0), callPets, refreshQuests, refreshShelf, shelfCount, isNight, questDone, questProgress, claimQuest, updateCarnivores, updateLure, petPower,
