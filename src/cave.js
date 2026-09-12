@@ -84,15 +84,20 @@ export function goldenReward(depth) { return 10 + 5 * depth; }
 export const CHAMPION_WAVE = TOTAL_WAVES;
 export const CHAMPION_SECONDS = 120;
 
-/** The wyrm you fight. Flies, keeps its distance and breathes frost. */
+/**
+ * The wyrm you fight: a frost sandworm. It tunnels under the ice with only a
+ * ridge showing, bursts up underneath you, then stays out long enough to be
+ * shot at while spitting frost shards.
+ */
 export function championSpec(depth) {
   const base = FROST_TITAN;
   return {
     id: 'boss_wyrm', name: 'FROST WYRM', model: 'wyrm', boss: true, champion: true,
     hp: Math.round(base.hp * 1.6 * Math.pow(HP_PER_LEVEL, depth)),
     bounty: Math.round(base.bounty * 4 * Math.pow(PAY_PER_LEVEL, depth)),
-    speed: 1.6, size: 2.4, color: 0x1565c0, spitColor: 0xbfe6ff,
-    attack: 'acid', hit: 10, reach: 17, fly: true,
+    speed: 1.6, size: 2.0, color: 0x1565c0, spitColor: 0xbfe6ff,
+    attack: 'burrow', hit: 10, reach: 17,
+    verbs: { erupt: '🧊 erupted right underneath you', acid: '❄️ blasted you with frost shards' },
   };
 }
 

@@ -1059,12 +1059,14 @@ const bugs = new BugSystem(scene, {
     // Knocked back, and the clock takes the hit. A wyrm shrugs some of it off.
     const dx = player.pos.x - bug.mesh.position.x, dz = player.pos.z - bug.mesh.position.z;
     const d = Math.hypot(dx, dz) || 1;
-    const shove = kind === 'leap' ? 4.5 : kind === 'acid' ? 0 : 2.2;
+    const shove = kind === 'erupt' ? 7 : kind === 'leap' ? 4.5 : kind === 'acid' ? 0 : 2.2;
     player.pos.x += (dx / d) * shove;
     player.pos.z += (dz / d) * shove;
     if (shove) { player.vy = 4; player.grounded = false; }
     caveHit = 0.5;
-    const verb = { sting: '🦂 stung you', acid: '🧪 sprayed acid on you', leap: '🕷️ pounced on you' }[kind] || '🦷 bit you';
+    const verb = bug.spec.verbs?.[kind]
+      || { sting: '🦂 stung you', acid: '🧪 sprayed acid on you', leap: '🕷️ pounced on you' }[kind]
+      || '🦷 bit you';
     ui.toast(`<b>${bug.spec.name}</b> ${verb} — <b>−${cost}s</b>`, 'bad');
     sfx.deny();
     gamepad.rumble(0.7, 220);
@@ -1521,7 +1523,7 @@ function updatePrompt() {
     else if (lair.phase === 'won') show(`<span class="sub">🏆 Lair cleared — head for the glowing arch</span>`);
     else if (lair.phase === 'fight') {
       show(lair.wave === lair.championWave
-        ? `<span class="sub">🐉 Fight the Frost Wyrm! Its frost breath costs you 10 seconds</span>`
+        ? `<span class="sub">🐉 The Frost Wyrm tunnels under the ice — watch the ridge and get clear before it erupts!</span>`
         : `<span class="sub">Fight! Every hit costs you time — a bite 4s, a pounce 6s, a sting 9s</span>`);
     }
     else show('');

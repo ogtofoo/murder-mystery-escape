@@ -256,7 +256,7 @@ export class Player {
   /** Climb onto a mount (or drop off again). Riding is faster and taller. */
   setRiding(mount) {
     this.riding = mount;
-    this.rideHeight = mount ? 1.5 : 0;
+    this.rideHeight = mount ? (mount.spec?.rideHeight ?? 1.5) : 0;
   }
 
   /** Where the gardener may walk: a disc around a point. */
@@ -291,7 +291,8 @@ export class Player {
       const target = head.clone().addScaledVector(dir, 0.5);
       target.y += 0.45;
       // Pull the camera in if scenery (the shop stall) is behind the player.
-      let dist = this.camDistance;
+      // A mount is far bigger than the gardener, so sit further back on one.
+      let dist = this.camDistance * (this.riding ? 1.9 : 1);
       if (this.obstacles.length) {
         const back = dir.clone().negate();
         this.camRay.set(target, back);

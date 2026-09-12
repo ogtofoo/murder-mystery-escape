@@ -22,7 +22,29 @@ function buildBug(spec) {
       o.material.roughness = 0.5;
     });
     const wings = g.userData.wings || [];
-    g.userData = { legs: [], body: g.children[0], tail: null, sac: null, wings };
+    const parts = [...g.children];
+
+    // A ridge of broken ice that rides above it while it is tunnelling.
+    const wake = new THREE.Group();
+    const churn = new THREE.MeshStandardMaterial({ color: 0x1e6fa8, flatShading: true, roughness: 0.5 });
+    const iceMat = new THREE.MeshStandardMaterial({ color: 0xf2fbff, flatShading: true, roughness: 0.25 });
+    // A dark churned mound, stretched along the way it is travelling.
+    const mound = new THREE.Mesh(new THREE.ConeGeometry(1.0, 1.0, 7), churn);
+    mound.position.y = 0.45;
+    mound.scale.z = 2.1;
+    wake.add(mound);
+    // Broken ice thrown up around it.
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      const shard = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.7 + Math.random() * 0.6, 4), iceMat);
+      shard.position.set(Math.cos(a) * 0.95, 0.3, Math.sin(a) * 1.7);
+      shard.rotation.set((Math.random() - 0.5) * 0.9, Math.random(), (Math.random() - 0.5) * 0.9);
+      wake.add(shard);
+    }
+    wake.visible = false;
+    g.add(wake);
+
+    g.userData = { legs: [], body: parts[0], tail: null, sac: null, wings, parts, wake };
     return g;
   }
 
@@ -300,7 +322,7 @@ export class BugSystem {
 
       // Health bar faces the camera, and only shows once a bug is hurt.
       bug.bar.position.set(bug.mesh.position.x, bug.mesh.position.y + 0.95 * bug.spec.size, bug.mesh.position.z);
-      bug.bar.visible = bug.hp < bug.maxHp;
+      bug.bar.visible = bug.hp < bug.maxHp && !bug.hidden;
       if (bug.bar.visible) {
         const k = Math.max(0, bug.hp / bug.maxHp);
         bug.bar.userData.fill.scale.x = k;
@@ -355,6 +377,8 @@ export class BugSystem {
     };
     bug.mesh.rotation.y = Math.atan2(dx, dz);
 
+    if (kind === 'burrow') { this.burrow(bug, dt, t); return; }
+
     if (kind === 'acid') {
       walkTo(Math.min(spec.reach || 10, 9) * 0.8);
       if (bug.biteCd <= 0 && d <= (spec.reach || 10)) {
@@ -385,6 +409,74 @@ export class BugSystem {
       bug.strike = 1;
       this.hooks.onAttack?.(bug, kind);
     }
+  }
+
+  /**
+   * A sandworm's fight: tunnel under the ice toward the gardener with only a
+   * ridge showing, burst up underneath them, stay out long enough to be shot
+   * at while spitting frost, then dive again. It cannot be hit while under.
+   */
+  burrow(bug, dt, t) {
+    const p = this.hooks.playerPos();
+    const u = bug.mesh.userData;
+    const DEEP = -9;
+    const OUT = 2.0;
+    if (!bug.burrowMode) { bug.burrowMode = 'under'; bug.dive = 2.2; }
+    bug.dive -= dt;
+
+    const show = on => {
+      for (const m of u.parts || []) m.visible = on;
+      if (u.wake) {
+        u.wake.visible = !on;
+        // Keep the ridge on the surface however deep the body is. The group is
+        // scaled, so the local offset has to be divided back down.
+        u.wake.position.y = (0.1 - bug.mesh.position.y) / (bug.mesh.scale.y || 1);
+      }
+    };
+    const dx = p.x - bug.mesh.position.x, dz = p.z - bug.mesh.position.z;
+    const d = Math.hypot(dx, dz) || 0.001;
+
+    if (bug.burrowMode === 'under') {
+      const v = bug.spec.speed * 4.2 * dt;
+      bug.mesh.position.x += (dx / d) * v;
+      bug.mesh.position.z += (dz / d) * v;
+      bug.mesh.position.y = DEEP;
+      bug.mesh.rotation.x = 0;
+      bug.hidden = true;
+      show(false);
+      if (bug.dive <= 0 && d < 6) { bug.burrowMode = 'rise'; bug.dive = 0.9; }
+      return;
+    }
+
+    if (bug.burrowMode === 'rise') {
+      const k = 1 - Math.max(0, bug.dive) / 0.9;
+      bug.mesh.position.y = DEEP + (OUT - DEEP) * k;
+      bug.mesh.rotation.x = -1.1 + 0.72 * k;
+      bug.hidden = false;
+      show(true);
+      if (bug.dive <= 0) {
+        bug.burrowMode = 'out';
+        bug.dive = 6;
+        bug.biteCd = 1.4;
+        // Anything standing where it came up gets thrown.
+        if (d < 6) this.hooks.onAttack?.(bug, 'erupt');
+      }
+      return;
+    }
+
+    if (bug.burrowMode === 'out') {
+      // Reared up: nose high, body sloping back down into the ice.
+      bug.mesh.position.y = OUT + Math.sin(t * 1.6) * 0.3;
+      bug.mesh.rotation.x = -0.38 + Math.sin(t * 1.1) * 0.08;
+      if (bug.biteCd <= 0) { bug.biteCd = 2.2; this.spit(bug, p); }
+      if (bug.dive <= 0) { bug.burrowMode = 'dive'; bug.dive = 0.8; }
+      return;
+    }
+
+    const k = 1 - Math.max(0, bug.dive) / 0.8;
+    bug.mesh.position.y = OUT + (DEEP - OUT) * k;
+    bug.mesh.rotation.x = -0.38 + 1.3 * k;
+    if (bug.dive <= 0) { bug.burrowMode = 'under'; bug.dive = 1.6 + Math.random(); }
   }
 
   /** Launch an acid glob at a point; it damages on arrival. */
@@ -422,6 +514,7 @@ export class BugSystem {
   pick(origin, dir, range) {
     let best = null, bestT = range;
     for (const bug of this.bugs) {
+      if (bug.hidden) continue;
       const px = bug.mesh.position.x - origin.x;
       const py = bug.mesh.position.y + 0.3 * bug.spec.size - origin.y;
       const pz = bug.mesh.position.z - origin.z;
@@ -436,14 +529,14 @@ export class BugSystem {
 
   /** Every bug within `radius` of a point. */
   near(x, z, radius) {
-    return this.bugs.filter(b => Math.hypot(b.mesh.position.x - x, b.mesh.position.z - z) <= radius);
+    return this.bugs.filter(b => !b.hidden && Math.hypot(b.mesh.position.x - x, b.mesh.position.z - z) <= radius);
   }
 
   /** Nearest bug to a point, for turret targeting. */
   nearest(x, z, radius) {
     let best = null, bestD = radius;
     for (const bug of this.bugs) {
-      if (bug.arena) continue;          // lair bosses are the gardener's problem, not the turrets'
+      if (bug.arena || bug.hidden) continue;   // lair bosses are the gardener's problem, not the turrets'
       const d = Math.hypot(bug.mesh.position.x - x, bug.mesh.position.z - z);
       if (d < bestD) { best = bug; bestD = d; }
     }

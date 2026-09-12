@@ -3,10 +3,11 @@
 import * as THREE from 'three';
 import { PETS_BY_ID, TIERS } from './data.js';
 
-function m(color, tier, emissive = 0.18) {
+/** `glow` overrides the tier's colour for pets whose own palette must win. */
+function m(color, tier, emissive = 0.18, glow = null) {
   return new THREE.MeshStandardMaterial({
     color, flatShading: true, roughness: 0.6,
-    emissive: new THREE.Color(TIERS[tier].color).multiplyScalar(TIERS[tier].shine * emissive),
+    emissive: new THREE.Color(glow ?? TIERS[tier].color).multiplyScalar(TIERS[tier].shine * emissive),
   });
 }
 
@@ -145,28 +146,54 @@ const SHAPES = {
     g.userData.tail = tail;
     eyes(g, 0.52, 0.6, 0.13, 0.055);
   },
+  /**
+   * A frost sandworm: a long segmented body that arcs up out of the ground,
+   * ringed plates down its back, and a round maw full of teeth. No legs, no
+   * wings — it swims through the ice.
+   */
   wyrm(g, p, a, b) {
-    // Big enough to sit on: long body, broad wings, horned head.
-    g.add(part(ball(), a, [0, 0.85, -0.1], [1.5, 1.15, 2.3]));
-    for (let i = 0; i < 4; i++) {                                          // tapering tail
-      const seg = part(ball(), a, [0, 0.8 - i * 0.05, -1.5 - i * 0.5], [0.7 - i * 0.14, 0.6 - i * 0.12, 0.7]);
-      g.add(seg);
+    // Hand-shaped arc: the first few segments ride clear of the ground with a
+    // broad back to stand on, then it plunges out of sight behind the saddle.
+    const BODY = [
+      { y: 1.55, w: 1.75 }, { y: 1.62, w: 1.75 }, { y: 1.45, w: 1.65 },
+      { y: 1.05, w: 1.50 }, { y: 0.35, w: 1.32 }, { y: -0.80, w: 1.12 },
+      { y: -2.20, w: 0.96 }, { y: -3.80, w: 0.82 }, { y: -5.40, w: 0.70 },
+      { y: -7.00, w: 0.60 }, { y: -8.60, w: 0.50 },
+    ];
+    BODY.forEach((seg, i) => {
+      const { y, w } = seg;
+      const z = -i * 1.3;
+      g.add(part(ball(), i % 2 ? a : b, [0, y, z], [w, w * 0.98, 1.35]));
+      // Ridged ice plates along the spine.
+      if (i < BODY.length - 2) {
+        const plate = part(cone(), b, [0, y + w * 0.52, z], [w * 0.55, w * 0.75, 0.3]);
+        plate.rotation.x = 0.25;
+        g.add(plate);
+      }
+      // Segment rings, so the body reads as banded rather than smooth.
+      if (i && i < BODY.length - 1) {
+        g.add(part(torus(), b, [0, y, z + 0.6], w * 2.1));
+      }
+    });
+    // Where a rider sits: on the broad back, a few segments behind the maw.
+    g.userData.saddle = { z: -3.9, y: 1.05 + 1.5 * 0.52 };
+
+    // The maw: a dark throat ringed with teeth behind a heavy lip.
+    const throat = part(ball(), eyeMat(), [0, 1.55, 1.1], [1.25, 1.25, 0.7]);
+    g.add(throat);
+    for (let i = 0; i < 14; i++) {
+      const ang = (i / 14) * Math.PI * 2;
+      const long = i % 2 ? 1 : 0.62;
+      const tooth = part(cone(), b, [Math.cos(ang) * 1.02, 1.55 + Math.sin(ang) * 1.02, 1.35], [0.2, 0.95 * long, 0.2]);
+      tooth.rotation.x = Math.PI / 2;
+      g.add(tooth);
     }
-    tilt(g, part(cone(), b, [0, 0.7, -3.5], [0.5, 1.0, 0.5]), -Math.PI / 2);
-    g.add(part(ball(), a, [0, 1.35, 1.5], [0.8, 0.75, 0.95]));             // head
-    tilt(g, part(cone(), b, [0, 1.2, 2.35], [0.42, 0.6, 0.42]), Math.PI / 2);
+    const lip = part(torus(), a, [0, 1.55, 1.15], 3.1);
+    g.add(lip);
+    // Small dark sensor pits instead of eyes — it hunts by feel.
     for (const side of [-1, 1]) {
-      const w = part(ball(), b, [side * 1.7, 1.35, -0.3], [1.9, 0.14, 1.5]);
-      w.userData.wing = side;
-      g.add(w);
-      g.add(part(cone(), b, [side * 0.28, 1.9, 1.35], [0.16, 0.6, 0.16])); // horns
-      g.add(part(cyl(), b, [side * 0.6, 0.3, 0.7], [0.18, 0.6, 0.18]));    // legs
-      g.add(part(cyl(), b, [side * 0.6, 0.3, -0.9], [0.18, 0.6, 0.18]));
+      g.add(part(ball(), eyeMat(), [side * 1.25, 2.1, 0.35], 0.16));
     }
-    for (let i = 0; i < 5; i++) {                                          // spine ridge
-      g.add(part(cone(), b, [0, 1.5 + Math.sin(i) * 0.05, 0.8 - i * 0.55], [0.16, 0.42, 0.16]));
-    }
-    eyes(g, 1.5, 2.05, 0.3, 0.09);
   },
   sprite(g, p, a, b) {
     const core = part(ball(), a, [0, 0.2, 0], 0.5);
@@ -186,14 +213,16 @@ const SHAPES = {
   },
 };
 
-const FLYERS = new Set(['bee', 'owl', 'drake', 'sprite', 'wyrm']);
+const FLYERS = new Set(['bee', 'owl', 'drake', 'sprite']);
 
 export function buildPet(spec) {
   const g = new THREE.Group();
   const [cA, cB] = spec.colors;
-  SHAPES[spec.shape](g, spec, m(cA, spec.tier), m(cB, spec.tier));
+  SHAPES[spec.shape](g, spec, m(cA, spec.tier, 0.18, spec.glow), m(cB, spec.tier, 0.18, spec.glow));
+  const saddle = g.userData.saddle || null;
   g.userData = {
     spec,
+    saddle,
     flyer: FLYERS.has(spec.shape),
     wings: g.children.filter(c => c.userData.wing),
     spinners: g.children.filter(c => c.userData.spin),
@@ -276,11 +305,19 @@ export class PetPack {
       const u = p.mesh.userData;
       const happy = (happiness[p.uid] || 0) / 100;
 
-      // A mount you are sitting on just carries you around.
+      // A mount you are sitting on just carries you around. The worm swims
+      // through the ground, so it only bobs — the floor hides the rest.
       if (p.mode === 'ridden') {
         if (this.rider) {
-          p.mesh.position.set(this.rider.x, 0.2 + Math.sin(t * 2) * 0.08, this.rider.z);
-          p.mesh.rotation.y = this.rider.yaw;
+          // Line the saddle up under the rider, so the head rides out in front.
+          const s = u.saddle;
+          const yaw = this.rider.yaw;
+          const off = s ? -s.z : 0;
+          p.mesh.position.set(this.rider.x + Math.sin(yaw) * off,
+                              Math.sin(t * 2) * 0.12,
+                              this.rider.z + Math.cos(yaw) * off);
+          p.mesh.rotation.y = yaw;
+          p.mesh.rotation.x = Math.sin(t * 1.3) * 0.05;
         }
         for (const w of u.wings) w.rotation.z = Math.sin(t * 9 + u.phase) * 0.55 * w.userData.wing;
         return;

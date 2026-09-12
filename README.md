@@ -262,14 +262,20 @@ Rewards stack up fast:
 back with 1.3× the health and 1.45× the payout, forever. Since the rewards climb faster than the
 health, a deep lair is where the real money is — as long as you keep upgrading your weapon.
 
-**Wave 20 is the FROST WYRM**, flying above the ice, keeping its distance and breathing frost that
-costs you 10 seconds a hit. It has 1.6× a Frost Titan's health and you get a **two minute** clock
-for it alone.
+**Wave 20 is the FROST WYRM** — a frost sandworm the size of a bus, with a ringed body and a round
+maw full of teeth. It does not charge you across the floor. It **tunnels under the ice**, showing
+only a ridge of churned ice racing toward you, and while it is under there it cannot be hit at all.
+Then it **erupts** where you are standing, throwing you clear and costing 10 seconds. It stays up
+for a few seconds, spitting frost shards, and that is your window to hurt it before it dives again.
 
-**You have to beat it.** Win and the wyrm bows to you: a pet big enough to *ride*. Press **Y** to
-climb on. Riding is nearly twice as fast, you sit high above the crops, and **E** breathes a 12m
-cone of frost instead of firing your weapon. Press **Y** again to hop down. It never hatches from
-an egg — reaching wave 20 and beating it is the only way to get one.
+Watch the ridge and keep moving. It has 1.6× a Frost Titan's health and you get a **two minute**
+clock for it alone.
+
+**You have to beat it.** Win and the worm bows to you: a mount you ride like a Fremen. Press **Y**
+to climb on and you stand on its back while it swims through the ground, its maw out in front of
+you. Riding is nearly twice as fast, you sit high above the crops, and **E** breathes a 12m cone of
+frost instead of firing your weapon. Press **Y** again to hop down. It never hatches from an egg —
+reaching wave 20 and beating it is the only way to get one.
 
 Lose to it and you get nothing: the run freezes, the Level is *not* cleared, and you start the
 twenty waves again next time. Beat it on a later run and your own wyrm **gains a level** — each
@@ -357,7 +363,7 @@ so you can find him just by watching the dog.
 | Baby Drake | Prismatic | **Roars bugs in** — feeds your carnivores |
 | Phoenix Chick | Transcendent | Crop value +++ |
 | Star Sprite | SUPER | Mutation luck ×5.5 per level |
-| Frost Wyrm | CARNIVORE | **Rideable** — press Y. Not from an egg: clear Ice Lair Level 20 |
+| Frost Wyrm | CARNIVORE | A frost sandworm you **ride** — press Y. Not from an egg: beat wave 20 of the Ice Lair |
 
 A level-10 Star Sprite multiplies your mutation luck by 46 — Rainbow crops stop being a
 once-a-week event.

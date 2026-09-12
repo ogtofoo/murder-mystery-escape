@@ -333,7 +333,7 @@ export const PETS = [
   { id:'phoenix', name:'Phoenix Chick',tier:'transcendent', ability:'value',   power:0.3,  shape:'drake',  colors:[0xff6d00, 0xffd54f] },
   { id:'sprite',  name:'Star Sprite',  tier:'super',        ability:'luck',    power:4.5,  shape:'sprite', colors:[0xffffff, 0xffe082] },
   // Never hatches from an egg — the Ice Lair hands this one over at Level 20.
-  { id:'wyrm',    name:'Frost Wyrm',   tier:'carnivore',    ability:'ride',    power:1,    shape:'wyrm',   colors:[0x4fc3f7, 0xe1f5fe], mount:true },
+  { id:'wyrm',    name:'Frost Wyrm',   tier:'carnivore',    ability:'ride',    power:1,    shape:'wyrm',   colors:[0x4fc3f7, 0xe1f5fe], glow:0x2fb8ff, mount:true, rideHeight:1.85 },
 ];
 export const PETS_BY_ID = Object.fromEntries(PETS.map(p => [p.id, p]));
 
